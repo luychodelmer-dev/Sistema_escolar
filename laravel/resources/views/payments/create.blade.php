@@ -1,0 +1,15 @@
+@extends('layouts.app')
+@section('title', 'Registrar pago')
+@section('content')
+<main class="container py-5"><div class="card shadow-sm border-0 mx-auto" style="max-width: 900px"><div class="card-body p-4"><h1 class="h4 mb-1">Registrar pago</h1><p class="text-muted mb-4">Selecciona una matrícula y registra el pago correspondiente.</p>
+@if ($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
+<form method="POST" action="{{ route('payments.store') }}" class="row g-3">@csrf
+<div class="col-12"><label class="form-label" for="matricula_id">Alumno y matrícula</label><select class="form-select" id="matricula_id" name="matricula_id" required><option value="">Seleccionar alumno</option>@foreach ($matriculas as $matricula)<option value="{{ $matricula->id }}" @selected(old('matricula_id') == $matricula->id)>{{ $matricula->nombres }} {{ $matricula->apellido_paterno }} {{ $matricula->apellido_materno }} · DNI {{ $matricula->dni }} · {{ ucfirst($matricula->nivel) }} {{ $matricula->grado }}° {{ $matricula->seccion }} · {{ $matricula->anio }}</option>@endforeach</select></div>
+<div class="col-md-6"><label class="form-label" for="concepto_id">Concepto</label><select class="form-select" id="concepto_id" name="concepto_id" required><option value="">Seleccionar concepto</option>@foreach ($conceptos as $concepto)<option value="{{ $concepto->id }}" @selected(old('concepto_id') == $concepto->id)>{{ $concepto->descripcion }}@if ($concepto->monto_sugerido !== null) · S/ {{ number_format((float) $concepto->monto_sugerido, 2) }}@endif</option>@endforeach</select></div>
+<div class="col-md-3"><label class="form-label" for="monto">Monto</label><input class="form-control" id="monto" name="monto" type="number" min="0.01" step="0.01" value="{{ old('monto') }}" required></div>
+<div class="col-md-3"><label class="form-label" for="fecha_pago">Fecha</label><input class="form-control" id="fecha_pago" name="fecha_pago" type="date" value="{{ old('fecha_pago', date('Y-m-d')) }}" required></div>
+<div class="col-md-4"><label class="form-label" for="estado_pago">Estado</label><select class="form-select" id="estado_pago" name="estado_pago" required><option value="pagado" @selected(old('estado_pago', 'pagado') === 'pagado')>Pagado</option><option value="pendiente" @selected(old('estado_pago') === 'pendiente')>Pendiente</option><option value="anulado" @selected(old('estado_pago') === 'anulado')>Anulado</option></select></div>
+<div class="col-md-4"><label class="form-label" for="nro_recibo">N.° de recibo</label><input class="form-control" id="nro_recibo" name="nro_recibo" value="{{ old('nro_recibo') }}"></div><div class="col-md-4"><label class="form-label" for="talonario">Talonario</label><input class="form-control" id="talonario" name="talonario" value="{{ old('talonario') }}"></div>
+<div class="col-12 d-flex justify-content-end gap-2 mt-4"><a href="{{ route('payments.index') }}" class="btn btn-secondary">Cancelar</a><button class="btn btn-warning" type="submit">Guardar pago</button></div>
+</form></div></div></main>
+@endsection
