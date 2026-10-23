@@ -225,7 +225,7 @@ require_auth(['asistente', 'director']);
     </style>
 </head>
 <body class="bg-light">
-    <?php render_app_header('panel.php', 'logout.php'); ?>
+    <?php render_app_header(panel_home_path(), 'logout.php'); ?>
 
     <!-- Contenido Principal -->
     <div class="container content-shell py-5">
@@ -253,14 +253,26 @@ require_auth(['asistente', 'director']);
                 </div>
             </div>
 
-            <div class="col-md-4 module-item" data-search="alumnos matriculas matrícula niveles inicial primaria secundaria secciones">
+            <div class="col-md-4 module-item" data-search="estudiantes estudiantes dni niveles inicial primaria secundaria">
                 <div class="card module-card shadow-sm border-0 h-100">
                     <div class="card-body d-flex flex-column justify-content-between p-4">
                         <div>
-                            <h4 class="card-title text-success fw-bold">Alumnos y Matrículas</h4>
-                            <p class="card-text text-muted">Matrículas anuales estructuradas por niveles (Inicial, Primaria, Secundaria) y secciones.</p>
+                            <h4 class="card-title text-success fw-bold">Estudiantes</h4>
+                            <p class="card-text text-muted">Consulta estudiantes y filtra por nivel, grado y sección.</p>
                         </div>
-                        <a href="matriculas.php" class="btn btn-success mt-3">Gestionar Matrículas</a>
+                        <a href="estudiantes.php" class="btn btn-success mt-3">Gestionar Estudiantes</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4 module-item" data-search="matriculas matrícula registrar año niveles grados secciones">
+                <div class="card module-card shadow-sm border-0 h-100">
+                    <div class="card-body d-flex flex-column justify-content-between p-4">
+                        <div>
+                            <h4 class="card-title text-info fw-bold">Matrículas</h4>
+                            <p class="card-text text-muted">Registra y consulta matrículas anuales por nivel, grado y sección.</p>
+                        </div>
+                        <a href="matriculas.php" class="btn btn-info mt-3">Gestionar Matrículas</a>
                     </div>
                 </div>
             </div>

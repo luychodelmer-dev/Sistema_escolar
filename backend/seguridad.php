@@ -14,7 +14,7 @@ function require_auth(array $roles = []): void
 
 function has_permission(string $permission): bool
 {
-    if (($_SESSION['rol'] ?? '') === 'director') {
+    if (in_array($_SESSION['rol'] ?? '', ['director', 'hiperadmin'], true)) {
         return true;
     }
 
@@ -24,14 +24,22 @@ function has_permission(string $permission): bool
     }
 
     $stmt = $pdo->prepare(
-        'SELECT otorgado FROM permisos_usuario WHERE usuario_id = :usuario_id AND permiso = :permiso'
+        'SELECT EXISTS (
+            SELECT 1
+            FROM usuario_permisos AS asignacion
+            JOIN permisos ON permisos.id = asignacion.permiso_id
+            WHERE asignacion.usuario_id = :usuario_id
+              AND permisos.codigo = :permiso
+              AND permisos.activo = TRUE
+        )'
     );
     $stmt->execute([
         'usuario_id' => $_SESSION['user_id'] ?? 0,
         'permiso' => $permission,
     ]);
 
-    return (bool) $stmt->fetchColumn();
+    $granted = $stmt->fetchColumn();
+    return $granted === true || $granted === 't' || $granted === 1 || $granted === '1';
 }
 
 function require_permission(string $permission): void
@@ -55,7 +63,7 @@ function registrar_auditoria(string $accion, string $detalles): void
     }
 
     $stmt = $pdo->prepare(
-        'INSERT INTO auditoria_movimientos (usuario_id, accion, detalles, ip_origen)
+        'INSERT INTO auditoria_movimiento (usuario_id, accion, detalles, ip_origen)
          VALUES (:usuario_id, :accion, :detalles, :ip_origen)'
     );
     $stmt->execute([

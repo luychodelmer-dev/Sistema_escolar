@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!empty($correo) && !empty($password)) {
         // Buscamos al usuario por su correo en la base de datos
-        $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE correo = :correo AND estado = TRUE");
+        $stmt = $pdo->prepare("SELECT * FROM usuario WHERE correo = :correo AND estado = TRUE");
         $stmt->execute(['correo' => $correo]);
         $usuario = $stmt->fetch();
 
@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             registrar_auditoria('inicio_sesion', 'Inicio de sesión correcto.');
 
             // Redirigimos según el rol (Director o Asistente)
-            if ($usuario['rol'] === 'director') {
+            if (in_array($usuario['rol'], ['director', 'hiperadmin'], true)) {
                 $publicPath = defined('APP_PUBLIC_PATH') ? APP_PUBLIC_PATH : '';
                 header("Location: {$publicPath}director/panel.php");
             } else {

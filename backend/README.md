@@ -6,4 +6,4 @@ Aquí están las reglas comunes del servidor PHP tradicional:
 - `seguridad.php`: autenticación, permisos y auditoría.
 - `encabezado.php`: encabezado compartido de las pantallas.
 
-La aplicación Laravel conserva su estructura estándar dentro de `laravel/`.
+La aplicación se ejecuta con PHP tradicional y PostgreSQL desde la carpeta `public/`.

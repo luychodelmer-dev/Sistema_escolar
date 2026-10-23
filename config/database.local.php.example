@@ -1,7 +1,0 @@
-<?php
-return [
-    'host' => 'localhost',
-    'dbname' => 'sistema_escolar',
-    'username' => 'postgres',
-    'password' => '',
-];
