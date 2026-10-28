@@ -2,8 +2,10 @@
 require_once __DIR__ . '/../../app/bootstrap.php';
 require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/header.php';
+require_once __DIR__ . '/../../app/dashboard_metrics.php';
 
 require_auth(['director', 'hiperadmin']);
+$metrics = get_dashboard_metrics($pdo);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -28,10 +30,16 @@ require_auth(['director', 'hiperadmin']);
 <?php render_app_header(panel_home_path(), '../asistente/logout.php'); ?>
 <main class="container py-5">
     <div class="mb-4"><h1 class="h3 mb-1">Panel del Director</h1><p class="text-muted mb-0">Supervisa y gestiona la información principal de la institución.</p></div>
+    <div class="row g-3 mb-4">
+        <div class="col-md-4"><div class="card shadow-sm border-0 h-100"><div class="card-body"><h2 class="h6 text-primary">Estudiantes activos</h2><p class="display-5 fw-bold text-primary mb-0"><?= number_format($metrics['active_students']) ?></p></div></div></div>
+        <div class="col-md-4"><div class="card shadow-sm border-0 h-100"><div class="card-body"><h2 class="h6 text-success">Ingresos del mes</h2><p class="display-5 fw-bold text-success mb-0">S/ <?= number_format($metrics['monthly_income'], 2) ?></p></div></div></div>
+        <div class="col-md-4"><div class="card shadow-sm border-0 h-100"><div class="card-body"><h2 class="h6 text-warning">Deudas pendientes</h2><p class="display-5 fw-bold text-warning mb-0"><?= number_format($metrics['pending_debts']) ?></p></div></div></div>
+    </div>
     <div class="row g-4">
         <div class="col-md-4"><div class="card module-card shadow-sm"><div class="card-body p-4 d-flex flex-column"><h2 class="h5 text-primary">Padres y apoderados</h2><p class="text-muted flex-grow-1">Consulta y registra la información de los responsables.</p><a href="../asistente/padres.php" class="btn btn-primary">Gestionar padres</a></div></div></div>
         <div class="col-md-4"><div class="card module-card shadow-sm"><div class="card-body p-4 d-flex flex-column"><h2 class="h5 text-success">Estudiantes</h2><p class="text-muted flex-grow-1">Consulta estudiantes y filtra por nivel, grado y sección.</p><a href="../asistente/estudiantes.php" class="btn btn-success">Gestionar estudiantes</a></div></div></div>
         <div class="col-md-4"><div class="card module-card shadow-sm"><div class="card-body p-4 d-flex flex-column"><h2 class="h5 text-info">Matrículas</h2><p class="text-muted flex-grow-1">Registra y consulta matrículas por nivel, grado y sección.</p><a href="../asistente/matriculas.php" class="btn btn-info">Gestionar matrículas</a></div></div></div>
+        <div class="col-md-4"><div class="card module-card shadow-sm"><div class="card-body p-4 d-flex flex-column"><h2 class="h5 text-primary">Cursos y periodos</h2><p class="text-muted flex-grow-1">Administra la estructura académica para registrar calificaciones.</p><a href="../asistente/cursos_periodos.php" class="btn btn-primary">Gestionar estructura</a></div></div></div>
         <div class="col-md-4"><div class="card module-card shadow-sm"><div class="card-body p-4 d-flex flex-column"><h2 class="h5 text-warning">Control de pagos</h2><p class="text-muted flex-grow-1">Consulta y registra cuotas y otros pagos escolares.</p><a href="../asistente/pagos.php" class="btn btn-warning">Gestionar pagos</a></div></div></div>
         <div class="col-md-4"><div class="card module-card shadow-sm"><div class="card-body p-4 d-flex flex-column"><h2 class="h5 text-dark">Permisos</h2><p class="text-muted flex-grow-1">Otorga o revoca permisos de los asistentes.</p><a href="permisos.php" class="btn btn-dark">Gestionar permisos</a></div></div></div>
         <div class="col-md-4"><div class="card module-card shadow-sm"><div class="card-body p-4 d-flex flex-column"><h2 class="h5 text-secondary">Auditoría</h2><p class="text-muted flex-grow-1">Consulta accesos y cambios realizados.</p><a href="auditoria.php" class="btn btn-secondary">Ver auditoría</a></div></div></div>

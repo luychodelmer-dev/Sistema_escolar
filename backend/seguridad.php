@@ -14,7 +14,7 @@ function require_auth(array $roles = []): void
 
 function has_permission(string $permission): bool
 {
-    if (in_array($_SESSION['rol'] ?? '', ['director', 'hiperadmin'], true)) {
+    if (in_array(strtolower($_SESSION['rol'] ?? ''), ['hiperadmin', 'director', 'administrador'], true)) {
         return true;
     }
 
@@ -44,6 +44,10 @@ function has_permission(string $permission): bool
 
 function require_permission(string $permission): void
 {
+    if (in_array(strtolower($_SESSION['rol'] ?? ''), ['hiperadmin', 'director', 'administrador'], true)) {
+        return;
+    }
+
     if (!has_permission($permission)) {
         http_response_code(403);
         exit('No tienes permiso para realizar esta acción.');

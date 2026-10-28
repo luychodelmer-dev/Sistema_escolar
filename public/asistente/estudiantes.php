@@ -3,9 +3,10 @@ require_once __DIR__ . '/../../app/bootstrap.php';
 require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/header.php';
 
-require_auth(['asistente', 'director', 'hiperadmin']);
+require_auth(['asistente', 'director', 'hiperadmin', 'administrador']);
 $csrfToken = $_SESSION['csrf_token'] ??= bin2hex(random_bytes(32));
 $puedeCambiarEstado = has_permission('p_matricular');
+$puedeGestionarEstudiantes = has_permission('p_matricular');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'actualizar_estado') {
     require_permission('p_matricular');
@@ -138,9 +139,10 @@ $sql = "SELECT DISTINCT ON (al.id)
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $estudiantes = $stmt->fetchAll();
-$renderEstudianteRows = static function (array $rows) use ($puedeCambiarEstado, $csrfToken): void {
+$renderEstudianteRows = static function (array $rows) use ($puedeCambiarEstado, $puedeGestionarEstudiantes, $csrfToken): void {
     if (!$rows) {
-        echo '<tr><td colspan="' . ($puedeCambiarEstado ? '9' : '8') . '" class="text-center text-muted py-4">No hay estudiantes para mostrar.</td></tr>';
+        $columnCount = 8 + (int) $puedeCambiarEstado + (int) $puedeGestionarEstudiantes;
+        echo '<tr><td colspan="' . $columnCount . '" class="text-center text-muted py-4">No hay estudiantes para mostrar.</td></tr>';
         return;
     }
     foreach ($rows as $estudiante) {
@@ -160,6 +162,14 @@ $renderEstudianteRows = static function (array $rows) use ($puedeCambiarEstado, 
                 . '<option value="Retirado"' . ($estudiante['estado_academico'] === 'Retirado' ? ' selected' : '') . '>Retirado</option>'
                 . '<option value="Trasladado"' . ($estudiante['estado_academico'] === 'Trasladado' ? ' selected' : '') . '>Trasladado</option>'
                 . '</select><button class="btn btn-sm btn-outline-primary" type="submit">Actualizar</button></form></td>';
+        }
+        if ($puedeGestionarEstudiantes) {
+            echo '<td class="text-nowrap">'
+                . '<a class="btn btn-sm btn-outline-primary" href="editar_estudiante.php?id=' . (int) $estudiante['id'] . '">Editar</a> '
+                . '<form class="student-delete-form d-inline" method="POST" action="eliminar_estudiante.php" onsubmit="return confirm(\'¿Eliminar este estudiante? Si tiene historial vinculado, no se eliminará.\')">'
+                . '<input type="hidden" name="csrf_token" value="' . htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') . '">'
+                . '<input type="hidden" name="estudiante_id" value="' . (int) $estudiante['id'] . '">'
+                . '<button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button></form></td>';
         }
         echo '</tr>';
     }
@@ -215,7 +225,7 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
     <div class="d-flex justify-content-between px-3 pt-3"><span class="small text-muted" id="students-result-count" aria-live="polite"><?= count($estudiantes) ?> estudiantes</span><span class="small text-muted" id="students-loading" hidden>Actualizando…</span></div>
     <div class="table-responsive">
         <table class="table table-striped table-hover align-middle mb-0">
-            <thead><tr><th>DNI</th><th>Estudiante</th><th>Nivel</th><th>Grado</th><th>Sección</th><th>Año</th><th>Estado académico</th><th>Matrícula</th><?php if ($puedeCambiarEstado): ?><th>Acción</th><?php endif; ?></tr></thead>
+            <thead><tr><th>DNI</th><th>Estudiante</th><th>Nivel</th><th>Grado</th><th>Sección</th><th>Año</th><th>Estado académico</th><th>Matrícula</th><?php if ($puedeCambiarEstado): ?><th>Acción</th><?php endif; ?><?php if ($puedeGestionarEstudiantes): ?><th>Opciones</th><?php endif; ?></tr></thead>
             <tbody id="students-rows"><?php $renderEstudianteRows($estudiantes); ?></tbody>
         </table>
     </div>
@@ -252,7 +262,8 @@ async function refreshStudents() {
         studentsCount.textContent = `${studentsRows.querySelectorAll('[data-student-row]').length} estudiantes`;
     } catch (error) {
         if (error.name !== 'AbortError') {
-            studentsRows.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4">Error al cargar estudiantes.</td></tr>';
+            const columnCount = studentsRows.closest('table').querySelector('thead tr').children.length;
+            studentsRows.innerHTML = `<tr><td colspan="${columnCount}" class="text-center text-danger py-4">Error al cargar estudiantes.</td></tr>`;
             console.error(error);
         }
     } finally {
@@ -290,6 +301,27 @@ studentFilters.addEventListener('reset', () => {
 });
 
 studentsRows.addEventListener('submit', async (event) => {
+    const deleteForm = event.target.closest('.student-delete-form');
+    if (deleteForm) {
+        event.preventDefault();
+        const button = deleteForm.querySelector('button[type="submit"]');
+        button.disabled = true;
+        try {
+            const response = await fetch(deleteForm.action, {
+                method: 'POST',
+                headers: { Accept: 'application/json' },
+                body: new FormData(deleteForm)
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'No se pudo eliminar el estudiante.');
+            await refreshStudents();
+        } catch (error) {
+            window.alert(error.message);
+        } finally {
+            button.disabled = false;
+        }
+        return;
+    }
     const form = event.target.closest('.academic-status-form');
     if (!form) return;
     event.preventDefault();

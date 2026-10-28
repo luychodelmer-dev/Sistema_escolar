@@ -5,11 +5,7 @@ require_once __DIR__ . '/../../app/auth.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
-if (($_SESSION['rol'] ?? null) !== 'hiperadmin') {
-    http_response_code(403);
-    echo json_encode(['error' => 'No tienes permiso para eliminar estudiantes.']);
-    exit;
-}
+require_permission('p_matricular');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -54,39 +50,6 @@ try {
         exit;
     }
 
-    $deletePayments = $pdo->prepare(
-        'DELETE FROM pago
-         WHERE matricula_id IN (
-             SELECT id FROM matricula WHERE estudiante_id = :student_id
-         )
-         OR cuenta_pago_id IN (
-             SELECT cuenta.id
-             FROM cuenta_pago cuenta
-             JOIN matricula ON matricula.id = cuenta.matricula_id
-             WHERE matricula.estudiante_id = :account_student_id
-         )'
-    );
-    $deletePayments->execute([
-        'student_id' => $studentId,
-        'account_student_id' => $studentId,
-    ]);
-
-    $deleteAccounts = $pdo->prepare(
-        'DELETE FROM cuenta_pago
-         WHERE matricula_id IN (
-             SELECT id FROM matricula WHERE estudiante_id = :student_id
-         )'
-    );
-    $deleteAccounts->execute(['student_id' => $studentId]);
-
-    $deleteEnrollments = $pdo->prepare('DELETE FROM matricula WHERE estudiante_id = :student_id');
-    $deleteEnrollments->execute(['student_id' => $studentId]);
-
-    $deleteFamilyLinks = $pdo->prepare(
-        'DELETE FROM estudiante_responsable WHERE estudiante_id = :student_id'
-    );
-    $deleteFamilyLinks->execute(['student_id' => $studentId]);
-
     $deleteStudent = $pdo->prepare('DELETE FROM estudiante WHERE id = :id');
     $deleteStudent->execute(['id' => $studentId]);
     if ($deleteStudent->rowCount() !== 1) {
@@ -100,6 +63,20 @@ try {
     $pdo->commit();
 
     echo json_encode(['ok' => true, 'mensaje' => 'Estudiante eliminado correctamente.']);
+} catch (PDOException $exception) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    if ((string) $exception->getCode() === '23503') {
+        http_response_code(409);
+        echo json_encode([
+            'error' => 'No se puede eliminar: el estudiante tiene pagos, matrículas o notas vinculadas. Elimine ese historial primero.',
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    error_log('Error al eliminar estudiante ID ' . $studentId . ': ' . $exception->getMessage());
+    http_response_code(500);
+    echo json_encode(['error' => 'No se pudo eliminar al estudiante. No se aplicaron cambios.']);
 } catch (Throwable $exception) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();

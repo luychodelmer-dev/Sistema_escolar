@@ -2,8 +2,10 @@
 require_once __DIR__ . '/../../app/bootstrap.php';
 require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/header.php';
+require_once __DIR__ . '/../../app/dashboard_metrics.php';
 
 require_auth(['asistente', 'director']);
+$metrics = get_dashboard_metrics($pdo);
 ?>
 
 <!DOCTYPE html>
@@ -229,6 +231,11 @@ require_auth(['asistente', 'director']);
 
     <!-- Contenido Principal -->
     <div class="container content-shell py-5">
+        <div class="row g-3 mb-4">
+            <div class="col-md-4"><div class="card shadow-sm border-0 h-100"><div class="card-body"><h2 class="h6 text-primary">Estudiantes activos</h2><p class="display-5 fw-bold text-primary mb-0"><?= number_format($metrics['active_students']) ?></p></div></div></div>
+            <div class="col-md-4"><div class="card shadow-sm border-0 h-100"><div class="card-body"><h2 class="h6 text-success">Ingresos del mes</h2><p class="display-5 fw-bold text-success mb-0">S/ <?= number_format($metrics['monthly_income'], 2) ?></p></div></div></div>
+            <div class="col-md-4"><div class="card shadow-sm border-0 h-100"><div class="card-body"><h2 class="h6 text-warning">Deudas pendientes</h2><p class="display-5 fw-bold text-warning mb-0"><?= number_format($metrics['pending_debts']) ?></p></div></div></div>
+        </div>
         <div class="search-panel mb-4">
             <img class="catalog-logo" src="../assets/images/logo-institucion.jpg.jpg" alt="Logo de la Institución Educativa Divino Maestro">
             <div class="catalog-search">
@@ -276,6 +283,20 @@ require_auth(['asistente', 'director']);
                     </div>
                 </div>
             </div>
+
+            <?php if (has_permission('p_matricular')): ?>
+            <div class="col-md-4 module-item" data-search="cursos periodos académicos calificaciones notas">
+                <div class="card module-card shadow-sm border-0 h-100">
+                    <div class="card-body d-flex flex-column justify-content-between p-4">
+                        <div>
+                            <h4 class="card-title text-primary fw-bold">Cursos y periodos</h4>
+                            <p class="card-text text-muted">Administra cursos y periodos académicos para el registro de notas.</p>
+                        </div>
+                        <a href="cursos_periodos.php" class="btn btn-primary mt-3">Gestionar estructura</a>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <div class="col-md-4 module-item" data-search="pagos cuotas apafa qaliwarma internet multas gestion">
                 <div class="card module-card shadow-sm border-0 h-100">

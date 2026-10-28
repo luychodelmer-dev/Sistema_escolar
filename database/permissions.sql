@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS usuario_permisos (
 INSERT INTO permisos (codigo, nombre, descripcion) VALUES
     ('p_editar', 'Editar responsables', 'Crear y actualizar padres y apoderados.'),
     ('p_matricular', 'Gestionar matrículas', 'Registrar y actualizar matrículas.'),
-    ('p_cobrar', 'Gestionar pagos', 'Registrar y administrar pagos escolares.')
+    ('p_cobrar', 'Gestionar pagos', 'Registrar y administrar pagos escolares.'),
+    ('p_auditoria', 'Gestionar auditoría', 'Eliminar registros de auditoría.')
 ON CONFLICT (codigo) DO NOTHING;
 
 INSERT INTO usuario_permisos (usuario_id, permiso_id, otorgado_por, creado_en)
