@@ -18,7 +18,7 @@ $stmt = $pdo->prepare(
             CONCAT_WS(' ', nombres, apellido_paterno, apellido_materno) AS nombre
      FROM responsable
      WHERE CONCAT_WS(' ', nombres, apellido_paterno, apellido_materno, dni) ILIKE :term
-     ORDER BY apellido_paterno, apellido_materno, nombres
+     ORDER BY LOWER(TRIM(apellido_paterno)) ASC, LOWER(TRIM(COALESCE(apellido_materno, ''))) ASC, LOWER(TRIM(nombres)) ASC
      LIMIT 10"
 );
 $stmt->execute(['term' => '%' . $term . '%']);

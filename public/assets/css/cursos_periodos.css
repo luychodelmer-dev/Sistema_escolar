@@ -1,0 +1,106 @@
+/**
+ * Estilos para cursos_periodos.php
+ * /assets/css/cursos_periodos.css
+ */
+
+body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            font-size: 1rem;
+        }
+        .form-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
+        }
+        .form-card .form-control, .form-card .form-select {
+            border-color: #cbd5e1;
+            font-size: 0.96rem;
+            border-radius: 10px;
+            min-height: 42px;
+        }
+        .form-control-sm, .form-select-sm {
+            font-size: 0.92rem;
+            min-height: 38px;
+            border-radius: 8px;
+        }
+        .form-card .form-control:focus, .form-card .form-select:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+        .table thead th {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-weight: 700;
+            font-size: 0.88rem;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            border-bottom: 0;
+            padding: 0.9rem 1rem;
+            vertical-align: middle;
+        }
+        .table tbody td {
+            font-size: 0.95rem;
+            padding: 0.85rem 1rem;
+            vertical-align: middle;
+        }
+        .step-pill {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 0.85rem 1.15rem;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .step-pill:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+        }
+        .nav-main-tabs .nav-link {
+            color: #475569;
+            font-weight: 700;
+            font-size: 1.02rem;
+            border-radius: 10px;
+            padding: 0.75rem 1.25rem;
+            transition: all 0.2s ease;
+        }
+        .nav-main-tabs .nav-link.active {
+            background-color: #0f172a;
+            color: #ffffff;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+        }
+        .grado-box-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.15rem;
+            height: 100%;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .grado-box-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+        }
+        .seccion-pill-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.92rem;
+            font-weight: 600;
+            background-color: #f8fafc;
+            border: 1px solid #cbd5e1;
+            color: #1e293b;
+        }
+        .seccion-pill-badge.has-students {
+            background-color: #f0fdf4;
+            border-color: #86efac;
+            color: #15803d;
+        }
+        .seccion-pill-badge.empty-sec {
+            background-color: #f8fafc;
+            border-color: #e2e8f0;
+            color: #64748b;
+        }

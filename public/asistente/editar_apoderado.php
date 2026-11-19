@@ -1,8 +1,5 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../app/bootstrap.php';
 require_once __DIR__ . '/../../app/auth.php';
 
 if (!isset($_SESSION['user_id'])) {

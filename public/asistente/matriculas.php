@@ -162,6 +162,7 @@ BEGIN
 END $$
 SQL);
 
+$csrfToken = $_SESSION['csrf_token'] ??= bin2hex(random_bytes(32));
 $error = '';
 $mensaje = '';
 $busqueda = trim($_GET['buscar'] ?? '');
@@ -186,7 +187,11 @@ $sectionOptions = $pdo->query(
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_permission('p_matricular');
-    $estudianteIdRaw = trim($_POST['estudiante_id'] ?? '');
+    $submittedToken = $_POST['csrf_token'] ?? '';
+    if (!is_string($submittedToken) || !hash_equals($csrfToken, $submittedToken)) {
+        $error = 'Solicitud inválida o sesión expirada. Recarga la página e inténtalo nuevamente.';
+    } else {
+        $estudianteIdRaw = trim($_POST['estudiante_id'] ?? '');
     $estudianteId = $estudianteIdRaw === '' ? null : filter_var($estudianteIdRaw, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
     if ($estudianteId === false) {
         $error = 'Selecciona un estudiante existente válido.';
@@ -407,6 +412,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 : 'No se pudo guardar la matrícula. Detalle: ' . $detail;
         }
     }
+    }
 }
 
 if (isset($_GET['guardado'])) {
@@ -432,14 +438,63 @@ $stmt->execute($params);
 $matriculas = $stmt->fetchAll();
 $renderMatriculaRows = static function (array $rows): void {
     if (!$rows) {
-        echo '<tr><td colspan="6" class="text-center text-muted py-4">No hay matrículas para mostrar.</td></tr>';
+        echo '<tr><td colspan="8" class="text-center py-5">
+            <div class="py-4">
+                <i class="bi bi-search text-muted" style="font-size: 2.2rem;"></i>
+                <h5 class="mt-3 text-secondary fw-semibold">No se encontraron matrículas</h5>
+                <p class="text-muted small mb-0">Intenta con otro término de búsqueda por DNI o nombres.</p>
+            </div>
+        </td></tr>';
         return;
     }
+    $secuencia = 1;
+    $avatarColors = [
+        ['bg' => '#eff6ff', 'text' => '#1d4ed8'],
+        ['bg' => '#f0fdf4', 'text' => '#15803d'],
+        ['bg' => '#fdf2f8', 'text' => '#be185d'],
+        ['bg' => '#fefce8', 'text' => '#a16207'],
+        ['bg' => '#f5f3ff', 'text' => '#6d28d9'],
+        ['bg' => '#ecfeff', 'text' => '#0e7490']
+    ];
     foreach ($rows as $matricula) {
-        echo '<tr><td>' . htmlspecialchars($matricula['nombres'] . ' ' . $matricula['apellido_paterno'] . ' ' . $matricula['apellido_materno']) . '</td>';
-        echo '<td>' . htmlspecialchars($matricula['dni']) . '</td><td>' . htmlspecialchars($matricula['nivel']) . '</td>';
-        echo '<td>' . htmlspecialchars((string) $matricula['grado']) . '</td><td>' . htmlspecialchars($matricula['seccion']) . '</td>';
-        echo '<td>' . htmlspecialchars((string) $matricula['anio']) . '</td></tr>';
+        $inicial1 = mb_substr(trim($matricula['apellido_paterno'] ?? ''), 0, 1);
+        $inicial2 = mb_substr(trim($matricula['nombres'] ?? ''), 0, 1);
+        $iniciales = mb_strtoupper($inicial1 . $inicial2);
+        if ($iniciales === '') $iniciales = 'AL';
+        $col = $avatarColors[$secuencia % count($avatarColors)];
+        $avatarStyle = 'background-color:' . $col['bg'] . ';color:' . $col['text'] . ';';
+
+        $nivLow = mb_strtolower($matricula['nivel'] ?? '', 'UTF-8');
+        $dotCol = str_contains($nivLow, 'inic') ? '#eab308' : (str_contains($nivLow, 'prim') ? '#ef4444' : (str_contains($nivLow, 'secu') ? '#2563eb' : '#94a3b8'));
+
+        $nombreCompleto = $matricula['apellido_paterno'] . ' ' . $matricula['apellido_materno'] . ', ' . $matricula['nombres'];
+
+        echo '<tr><td class="text-center"><span class="badge-secuencia">#' . $secuencia++ . '</span></td>';
+        echo '<td>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="avatar-circle" style="' . $avatarStyle . '">' . htmlspecialchars($iniciales) . '</div>
+                    <span class="fw-bold text-dark" style="font-size: 1.02rem;"><i class="bi bi-mortarboard text-secondary me-1" style="font-size: 0.95rem;"></i>' . htmlspecialchars($nombreCompleto) . '</span>
+                </div>
+              </td>';
+        echo '<td><span class="font-monospace fw-bold text-dark" style="font-size: 0.96rem;">' . htmlspecialchars($matricula['dni']) . '</span></td>';
+        echo '<td>
+                <div class="fw-semibold text-dark d-flex align-items-center gap-1.5" style="font-size: 0.95rem;">
+                    <span class="d-inline-block rounded-circle flex-shrink-0" style="width: 8px; height: 8px; background-color: ' . $dotCol . ';"></span>
+                    ' . htmlspecialchars($matricula['nivel']) . '
+                </div>
+              </td>';
+        echo '<td style="font-size: 0.96rem;">' . htmlspecialchars((string) $matricula['grado']) . '</td><td style="font-size: 0.96rem;">' . htmlspecialchars($matricula['seccion']) . '</td>';
+        echo '<td><span class="badge bg-light text-secondary border px-2 py-1" style="font-size: 0.85rem;"><i class="bi bi-calendar-check me-1"></i>' . htmlspecialchars((string) $matricula['anio']) . '</span></td>';
+        echo '<td class="text-end">
+                <div class="d-inline-flex align-items-center gap-1">
+                    <a href="ficha_matricula.php?id=' . (int)$matricula['id'] . '" target="_blank" rel="opener" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" title="Imprimir Ficha de Matrícula" style="border-radius: 7px; padding: 0.25rem 0.55rem; font-size: 0.82rem;">
+                        <i class="bi bi-printer"></i> Ficha
+                    </a>
+                    <a href="ver_estudiante.php?id=' . (int)$matricula['estudiante_id'] . '" class="btn btn-sm btn-light border text-secondary" title="Ver perfil del estudiante" style="border-radius: 7px; padding: 0.25rem 0.45rem; font-size: 0.82rem;">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                </div>
+              </td></tr>';
     }
 };
 if (($_GET['ajax'] ?? '') === 'tabla') {
@@ -454,17 +509,40 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Matrículas - Sistema Escolar</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>body { background: #f4f7fb; color: #172b4d; } .page-header { background: #172b4d; color: #fff; } .card { border: 0; border-radius: 12px; } .required::after { content: ' *'; color: #dc3545; } .institution-brand { display: flex; align-items: center; gap: .6rem; white-space: nowrap; } .institution-brand img { width: 42px; height: 42px; object-fit: contain; border-radius: 50%; background: #fff; } .institution-brand span { font-size: 1.1rem; white-space: nowrap; } .header-user-photo { width: 52px; height: 52px; object-fit: cover; border: 2px solid rgba(255, 255, 255, .85); border-radius: 50%; } @media (max-width: 768px) { .institution-brand span { font-size: .95rem; } }</style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="../assets/css/app.css">
+    <link rel="stylesheet" href="../assets/css/matriculas.css">
 </head>
 <body>
 <?php render_app_header(panel_home_path(), 'logout.php'); ?>
-<main class="container py-4">
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4"><div><h1 class="h3 mb-1">Matrículas</h1><p class="text-muted mb-0">Registra matrículas por nivel, grado y sección.</p></div><a href="<?= htmlspecialchars(panel_home_path()) ?>" class="btn btn-outline-primary">Volver al panel</a></div>
-    <?php if ($mensaje !== ''): ?><div class="alert alert-success"><?= htmlspecialchars($mensaje) ?></div><?php endif; ?>
-    <?php if ($error !== ''): ?><div class="alert alert-danger" role="alert"><?= htmlspecialchars($error) ?></div><?php endif; ?>
-    <?php if ($puedeMatricular): ?><section class="card shadow-sm mb-4"><div class="card-body p-4"><h2 class="h5 mb-3">Nueva matrícula</h2><form method="POST" class="row g-3">
-        <div class="col-12"><fieldset><legend class="form-label fs-6">Tipo de estudiante</legend><div class="d-flex gap-4"><label class="form-check"><input class="form-check-input" type="radio" name="modo_estudiante" value="nuevo" <?= $estudianteId === null ? 'checked' : '' ?>><span class="form-check-label">Nuevo Estudiante</span></label><label class="form-check"><input class="form-check-input" type="radio" name="modo_estudiante" value="existente" <?= $estudianteId !== null ? 'checked' : '' ?>><span class="form-check-label">Estudiante Existente</span></label></div></fieldset></div>
+<main class="container-fluid px-3 px-md-4 px-xl-5 py-4">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 small">
+                    <li class="breadcrumb-item"><a href="<?= htmlspecialchars(panel_home_path()) ?>" class="text-decoration-none text-muted"><i class="bi bi-house-door"></i> Inicio</a></li>
+                    <li class="breadcrumb-item active text-primary fw-semibold" aria-current="page">Matrículas</li>
+                </ol>
+            </nav>
+            <h1 class="h3 fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+                Matrículas Escolares
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle fs-6 fw-semibold">Gestión 2026</span>
+            </h1>
+            <p class="text-muted mb-0 small">Registro y asignación de vacantes por nivel, grado y sección.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <a href="<?= htmlspecialchars(panel_home_path()) ?>" class="btn btn-outline-secondary d-inline-flex align-items-center gap-2 px-3 py-2" style="border-radius: 10px;">
+                <i class="bi bi-arrow-left"></i> Volver al panel
+            </a>
+        </div>
+    </div>
+    <?php if ($mensaje !== ''): ?><div class="alert alert-success d-flex align-items-center gap-2 mb-3 shadow-sm border-0"><i class="bi bi-check-circle-fill fs-5"></i> <?= htmlspecialchars($mensaje) ?></div><?php endif; ?>
+    <?php if ($error !== ''): ?><div class="alert alert-danger d-flex align-items-center gap-2 mb-3 shadow-sm border-0" role="alert"><i class="bi bi-exclamation-triangle-fill fs-5"></i> <?= htmlspecialchars($error) ?></div><?php endif; ?>
+    <?php if ($puedeMatricular): ?><section class="form-card mb-4"><div class="p-4"><h2 class="h5 mb-3 fw-bold text-dark d-flex align-items-center gap-2"><i class="bi bi-journal-plus text-primary"></i> Nueva matrícula</h2><form method="POST" class="row g-3">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES) ?>">
+        <div class="col-12"><fieldset><legend class="form-label fs-6 fw-semibold">Tipo de estudiante</legend><div class="d-flex gap-4"><label class="form-check"><input class="form-check-input" type="radio" name="modo_estudiante" value="nuevo" <?= $estudianteId === null ? 'checked' : '' ?>><span class="form-check-label fw-medium">Nuevo Estudiante</span></label><label class="form-check"><input class="form-check-input" type="radio" name="modo_estudiante" value="existente" <?= $estudianteId !== null ? 'checked' : '' ?>><span class="form-check-label fw-medium">Estudiante Existente</span></label></div></fieldset></div>
         <input type="hidden" id="estudiante_id" name="estudiante_id" value="<?= htmlspecialchars((string) ($estudianteId ?? '')) ?>">
         <div class="col-12 d-none" id="buscar-estudiante-wrap"><label class="form-label" for="buscar-estudiante">Buscar por DNI o nombre</label><input class="form-control" id="buscar-estudiante" autocomplete="off"><div id="estudiante-sugerencias" class="list-group mt-1"></div></div>
         <input type="hidden" id="hermano_id" name="hermano_id" value="<?= htmlspecialchars((string) ($_POST['hermano_id'] ?? '')) ?>">
@@ -479,20 +557,20 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
         <input type="hidden" id="grado_seccion_id" name="grado_seccion_id" value="<?= htmlspecialchars($_POST['grado_seccion_id'] ?? '') ?>">
         <div class="col-md-2"><label class="form-label required" for="anio">Año</label><input class="form-control" id="anio" name="anio" type="number" min="2020" max="2100" value="<?= htmlspecialchars((string) ($_POST['anio'] ?? date('Y'))) ?>" required></div>
         <div class="col-12 row g-3" id="family-contact-fields">
-            <h3 class="h6 border-bottom pb-2 mt-3">Padres o contactos de emergencia</h3>
+            <h3 class="h6 border-bottom pb-2 mt-3 fw-bold text-dark d-flex align-items-center gap-2"><i class="bi bi-people-fill text-primary"></i> Padres o contactos de emergencia</h3>
             <?php foreach ([
                 'padre' => ['Padre', 'padre'],
                 'madre' => ['Madre', 'madre'],
                 'emergencia' => ['Contacto de emergencia', 'emergencia'],
             ] as $prefix => [$label, $type]): ?>
                 <fieldset class="col-12 row g-3 border rounded p-3 mx-0">
-                    <legend class="float-none w-auto px-2 fs-6"><?= htmlspecialchars($label) ?></legend>
+                    <legend class="float-none w-auto px-2 fs-6 fw-semibold text-secondary"><?= htmlspecialchars($label) ?></legend>
                     <div class="col-12">
-                        <label class="form-check-label">
+                        <label class="form-check-label fw-semibold text-primary">
                             <input class="form-check-input me-2" type="radio" name="apoderado_principal"
                                    value="<?= htmlspecialchars($type) ?>" required
                                    <?= (($_POST['apoderado_principal'] ?? '') === $type) ? 'checked' : '' ?>>
-                            Responsable de la matrícula actual
+                            Responsable de la matrícula actual (Apoderado Principal)
                         </label>
                     </div>
                     <div class="col-md-3"><label class="form-label" for="<?= $prefix ?>_dni">DNI</label><input class="form-control" id="<?= $prefix ?>_dni" name="<?= $prefix ?>_dni" maxlength="8" inputmode="numeric" style="text-transform: uppercase;" value="<?= htmlspecialchars($_POST[$prefix . '_dni'] ?? '') ?>"></div>
@@ -506,276 +584,45 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
                 </fieldset>
             <?php endforeach; ?>
         </div>
-        <div class="col-12"><button class="btn btn-success" type="submit">Guardar matrícula</button></div>
+        <div class="col-12 pt-2"><button class="btn btn-primary d-inline-flex align-items-center gap-2 px-4 shadow-sm fw-semibold" style="border-radius: 10px;" type="submit"><i class="bi bi-check-circle-fill"></i> Guardar matrícula</button></div>
     </form></div></section><?php endif; ?>
-    <section class="card shadow-sm"><div class="card-body p-4"><form method="GET" class="row g-2 mb-3" data-live-filter data-live-target="#matriculas-rows"><div class="col-sm-9"><label class="visually-hidden" for="buscar">Buscar estudiante</label><input class="form-control" id="buscar" name="buscar" value="<?= htmlspecialchars($busqueda) ?>" placeholder="Buscar por nombre o DNI"></div><div class="col-sm-3"><button class="btn btn-outline-primary w-100" type="submit">Buscar</button></div></form><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Estudiante</th><th>DNI</th><th>Nivel</th><th>Grado</th><th>Sección</th><th>Año</th></tr></thead><tbody id="matriculas-rows"><?php $renderMatriculaRows($matriculas); ?></tbody></table></div></div></section>
+    <section class="table-card p-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h3 class="h5 mb-0 fw-bold text-dark d-flex align-items-center gap-2"><i class="bi bi-clock-history text-primary"></i> Historial de Matrículas</h3>
+            <span class="badge bg-primary px-3 py-2 fs-6" id="matriculas-count-badge"><?= count($matriculas) ?> matrículas</span>
+        </div>
+        <form method="GET" class="row g-2 mb-3" data-live-filter data-live-target="#matriculas-rows" data-live-count-target="#matriculas-count-badge" data-live-count-singular="matrícula" data-live-count-plural="matrículas">
+            <div class="col-sm-9">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                    <input class="form-control border-start-0 ps-0" id="buscar" name="buscar" value="<?= htmlspecialchars($busqueda) ?>" placeholder="Buscar por DNI o nombres de estudiante...">
+                </div>
+            </div>
+            <div class="col-sm-3">
+                <button class="btn btn-outline-primary w-100 d-inline-flex align-items-center justify-content-center gap-1" type="submit">
+                    <i class="bi bi-search"></i> Buscar
+                </button>
+            </div>
+        </form>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 65px;" class="text-center">#</th>
+                        <th style="min-width: 230px;">Estudiante</th>
+                        <th style="min-width: 115px;">DNI</th>
+                        <th style="min-width: 130px;">Nivel</th>
+                        <th style="min-width: 90px;">Grado</th>
+                        <th style="min-width: 90px;">Sección</th>
+                        <th style="min-width: 85px;">Año</th>
+                        <th style="min-width: 140px;" class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="matriculas-rows"><?php $renderMatriculaRows($matriculas); ?></tbody>
+            </table>
+        </div>
+    </section>
 </main>
-<script>
-const estudianteIdInput = document.getElementById('estudiante_id');
-const buscarEstudianteInput = document.getElementById('buscar-estudiante');
-const estudianteSugerencias = document.getElementById('estudiante-sugerencias');
-const buscarEstudianteWrap = document.getElementById('buscar-estudiante-wrap');
-const buscarHermanoInput = document.getElementById('buscar-hermano');
-const buscarHermanoWrap = document.getElementById('buscar-hermano-wrap');
-const hermanoIdInput = document.getElementById('hermano_id');
-const hermanoSugerencias = document.getElementById('hermano-sugerencias');
-const familyContactFields = document.getElementById('family-contact-fields');
-const familyPrefixes = ['padre', 'madre', 'emergencia'];
-const studentDataInputs = ['nombres', 'apellido_paterno', 'apellido_materno', 'dni'].map((id) => document.getElementById(id));
-const studentModeRadios = document.querySelectorAll('input[name="modo_estudiante"]');
-let studentSearchTimer;
-let studentSearchRequest;
-let studentDataRequest;
-let siblingSearchTimer;
-let siblingSearchRequest;
-
-function clearFamilyData() {
-    familyPrefixes.forEach((prefix) => {
-        ['dni', 'nombres', 'apellido_paterno', 'apellido_materno', 'celular'].forEach((field) => {
-            document.getElementById(`${prefix}_${field}`).value = '';
-        });
-    });
-    document.getElementById('emergencia_parentesco').value = '';
-    document.querySelectorAll('input[name="apoderado_principal"]').forEach((radio) => {
-        radio.checked = false;
-    });
-}
-
-function fillFamilyData(family, lastMatricula) {
-    clearFamilyData();
-    const selectedResponsibleId = String(lastMatricula?.apoderado_principal_id ?? '');
-    familyPrefixes.forEach((prefix) => {
-        const contact = family?.[prefix];
-        if (!contact) return;
-        ['dni', 'nombres', 'apellido_paterno', 'apellido_materno', 'celular'].forEach((field) => {
-            document.getElementById(`${prefix}_${field}`).value = contact[field] ?? '';
-        });
-        if (prefix === 'emergencia') {
-            document.getElementById('emergencia_parentesco').value = contact.parentesco ?? '';
-        }
-        const radio = document.querySelector(`input[name="apoderado_principal"][value="${prefix}"]`);
-        if (radio && (String(contact.id) === selectedResponsibleId || contact.es_apoderado === true || contact.es_apoderado === 't')) {
-            radio.checked = true;
-        }
-    });
-}
-
-function setStudentMode(mode, clear = true) {
-    const existing = mode === 'existente';
-    buscarEstudianteWrap.classList.toggle('d-none', !existing);
-    buscarHermanoWrap.classList.toggle('d-none', existing);
-    familyContactFields.classList.remove('d-none');
-    studentDataInputs.forEach((input) => {
-        input.readOnly = existing;
-        if (clear) input.value = '';
-    });
-    if (!existing && clear) {
-        estudianteIdInput.value = '';
-        clearFamilyData();
-        buscarEstudianteInput.value = '';
-        estudianteSugerencias.replaceChildren();
-    }
-    if (existing && clear) {
-        hermanoIdInput.value = '';
-        buscarHermanoInput.value = '';
-        hermanoSugerencias.replaceChildren();
-    }
-}
-
-studentModeRadios.forEach((radio) => {
-    radio.addEventListener('change', () => setStudentMode(radio.value));
-});
-setStudentMode(estudianteIdInput.value ? 'existente' : 'nuevo', false);
-
-buscarEstudianteInput.addEventListener('input', () => {
-    estudianteIdInput.value = '';
-    studentDataRequest?.abort();
-    familyContactFields.classList.remove('d-none');
-    studentDataInputs.forEach((input) => { input.value = ''; });
-    clearFamilyData();
-    estudianteSugerencias.replaceChildren();
-    clearTimeout(studentSearchTimer);
-    studentSearchRequest?.abort();
-    const term = buscarEstudianteInput.value.trim();
-    if (term.length < 2) return;
-
-    studentSearchTimer = setTimeout(async () => {
-        studentSearchRequest = new AbortController();
-        try {
-            const query = new URLSearchParams({ ajax: 'buscar_estudiantes', q: term });
-            const response = await fetch(`matriculas.php?${query}`, { signal: studentSearchRequest.signal });
-            if (!response.ok) throw new Error('No se pudieron buscar estudiantes.');
-            const estudiantes = await response.json();
-            estudiantes.forEach((estudiante) => {
-                const opcion = document.createElement('button');
-                opcion.type = 'button';
-                opcion.className = 'list-group-item list-group-item-action';
-                opcion.textContent = `${estudiante.apellido_paterno} ${estudiante.apellido_materno}, ${estudiante.nombres} · DNI ${estudiante.dni}`;
-                opcion.addEventListener('click', () => {
-                    estudianteIdInput.value = estudiante.id;
-                    studentDataInputs[0].value = estudiante.nombres;
-                    studentDataInputs[1].value = estudiante.apellido_paterno;
-                    studentDataInputs[2].value = estudiante.apellido_materno;
-                    studentDataInputs[3].value = estudiante.dni;
-                    buscarEstudianteInput.value = opcion.textContent;
-                    estudianteSugerencias.replaceChildren();
-                    familyContactFields.classList.remove('d-none');
-                    loadExistingStudent(estudiante.id);
-                });
-                estudianteSugerencias.append(opcion);
-            });
-            if (!estudiantes.length) {
-                const empty = document.createElement('div');
-                empty.className = 'list-group-item text-muted';
-                empty.textContent = 'No se encontraron estudiantes.';
-                estudianteSugerencias.append(empty);
-            }
-        } catch (error) {
-            if (error.name !== 'AbortError') console.error(error);
-        }
-    }, 250);
-});
-
-async function loadExistingStudent(id, { populateStudent = true, populateHistory = true } = {}) {
-    studentDataRequest?.abort();
-    studentDataRequest = new AbortController();
-    try {
-        const response = await fetch(`matriculas.php?ajax=cargar_estudiante&id=${encodeURIComponent(id)}`, {
-            signal: studentDataRequest.signal
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'No se pudieron cargar los datos del estudiante.');
-
-        const student = data.student;
-        if (populateStudent) {
-            studentDataInputs[0].value = student.nombres;
-            studentDataInputs[1].value = student.apellido_paterno;
-            studentDataInputs[2].value = student.apellido_materno;
-            studentDataInputs[3].value = student.dni;
-        }
-        fillFamilyData(data.family, data.last_matricula);
-        if (populateHistory) populateAcademicHistory(data.last_matricula);
-    } catch (error) {
-        if (error.name === 'AbortError') return;
-        console.error(error);
-        const message = document.createElement('div');
-        message.className = 'alert alert-danger mt-2';
-        message.textContent = error.message;
-        const target = populateStudent ? estudianteSugerencias : hermanoSugerencias;
-        target.replaceChildren(message);
-        if (!populateStudent) hermanoIdInput.value = '';
-    }
-}
-
-buscarHermanoInput.addEventListener('input', () => {
-    hermanoIdInput.value = '';
-    clearTimeout(siblingSearchTimer);
-    siblingSearchRequest?.abort();
-    studentDataRequest?.abort();
-    hermanoSugerencias.replaceChildren();
-    const term = buscarHermanoInput.value.trim();
-    if (term.length < 2) return;
-
-    siblingSearchTimer = setTimeout(async () => {
-        siblingSearchRequest = new AbortController();
-        try {
-            const query = new URLSearchParams({ ajax: 'buscar_estudiantes', q: term });
-            const response = await fetch(`matriculas.php?${query}`, { signal: siblingSearchRequest.signal });
-            if (!response.ok) throw new Error('No se pudieron buscar hermanos.');
-            const estudiantes = await response.json();
-            estudiantes.forEach((hermano) => {
-                const opcion = document.createElement('button');
-                opcion.type = 'button';
-                opcion.className = 'list-group-item list-group-item-action';
-                opcion.textContent = `${hermano.apellido_paterno} ${hermano.apellido_materno}, ${hermano.nombres} · DNI ${hermano.dni}`;
-                opcion.addEventListener('click', async () => {
-                    hermanoIdInput.value = hermano.id;
-                    buscarHermanoInput.value = opcion.textContent;
-                    hermanoSugerencias.replaceChildren();
-                    estudianteIdInput.value = '';
-                    studentModeRadios.forEach((radio) => { radio.checked = radio.value === 'nuevo'; });
-                    setStudentMode('nuevo', false);
-                    try {
-                        await loadExistingStudent(hermano.id, { populateStudent: false, populateHistory: false });
-                    } catch (error) {
-                        hermanoIdInput.value = '';
-                        console.error(error);
-                    }
-                });
-                hermanoSugerencias.append(opcion);
-            });
-            if (!estudiantes.length) {
-                const empty = document.createElement('div');
-                empty.className = 'list-group-item text-muted';
-                empty.textContent = 'No se encontraron estudiantes.';
-                hermanoSugerencias.append(empty);
-            }
-        } catch (error) {
-            if (error.name !== 'AbortError') console.error(error);
-        }
-    }, 250);
-});
-
-const levelSelect = document.getElementById('nivel_id');
-const gradeSelect = document.getElementById('grado_id');
-const sectionSelect = document.getElementById('seccion_id');
-const gradeSectionInput = document.getElementById('grado_seccion_id');
-const updateGrades = () => {
-    Array.from(gradeSelect.options).forEach((option) => {
-        option.hidden = option.value !== '' && option.dataset.nivelId !== levelSelect.value;
-    });
-    if (gradeSelect.selectedOptions[0]?.hidden) {
-        gradeSelect.value = '';
-    }
-    updateSections();
-};
-const updateSections = () => {
-    Array.from(sectionSelect.options).forEach((option) => {
-        option.hidden = option.value !== '' && option.dataset.gradoId !== gradeSelect.value;
-    });
-    const selected = sectionSelect.selectedOptions[0];
-    if (!selected || selected.hidden) {
-        sectionSelect.value = '';
-        gradeSectionInput.value = '';
-    } else {
-        gradeSectionInput.value = selected.dataset.gradoSeccionId;
-    }
-};
-levelSelect.addEventListener('change', updateGrades);
-gradeSelect.addEventListener('change', updateSections);
-sectionSelect.addEventListener('change', updateSections);
-updateGrades();
-
-function populateAcademicHistory(lastMatricula) {
-    if (!lastMatricula?.nivel_id) {
-        levelSelect.value = '';
-        gradeSelect.value = '';
-        sectionSelect.value = '';
-        gradeSectionInput.value = '';
-        updateGrades();
-        return;
-    }
-    gradeSelect.value = '';
-    sectionSelect.value = '';
-    gradeSectionInput.value = '';
-    levelSelect.value = String(lastMatricula.nivel_id);
-    updateGrades();
-
-    const gradeOptions = Array.from(gradeSelect.options).filter((option) => !option.hidden && option.value);
-    const nextGrade = gradeOptions.find((option) =>
-        Number(option.dataset.numero) === Number(lastMatricula.grado_numero) + 1
-    );
-    const previousGrade = gradeOptions.find((option) => option.value === String(lastMatricula.grado_id));
-    const chosenGrade = nextGrade || previousGrade;
-    if (!chosenGrade) return;
-    gradeSelect.value = chosenGrade.value;
-    updateSections();
-
-    const visibleSections = Array.from(sectionSelect.options).filter((option) => !option.hidden && option.value);
-    const previousSection = visibleSections.find((option) => option.value === String(lastMatricula.seccion_id));
-    sectionSelect.value = (previousSection || visibleSections[0])?.value || '';
-    updateSections();
-}
-</script>
+<script src="../assets/js/matriculas.js" defer></script>
 </body>
 </html>

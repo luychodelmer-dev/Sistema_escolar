@@ -1,0 +1,21 @@
+/**
+ * Estilos para padres.php
+ * /assets/css/padres.css
+ */
+
+.avatar-circle {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.92rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    letter-spacing: -0.02em;
+}
+
+.table-card tbody tr:hover td {
+    background-color: #f8fafc;
+}

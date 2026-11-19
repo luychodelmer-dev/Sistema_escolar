@@ -1,0 +1,536 @@
+/**
+ * Sistema Escolar - I.E. Divino Maestro
+ * Estilos Principales de la Aplicación y Sistema de Diseño
+ * /assets/css/app.css
+ */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+:root {
+    --app-sidebar-width: 250px;
+    --app-bg: #f4f6f8;
+    --app-sidebar-bg: #ffffff;
+    --app-border: #edf2f7;
+    --app-text: #1e293b;
+    --app-text-muted: #64748b;
+    --app-nav-active-bg: #e9edf7;
+    --app-nav-active-color: #1e40af;
+    --app-primary: #1e40af;
+    --app-primary-hover: #1d4ed8;
+    --app-secondary: #0f172a;
+}
+
+html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    background-color: var(--app-bg) !important;
+    color: var(--app-text) !important;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+}
+
+/* Tipografía y Jerarquía */
+h1, .h1 { font-size: calc(1.3rem + 0.35vw); font-weight: 700; color: #0f172a; }
+h2, .h2 { font-size: calc(1.15rem + 0.25vw); font-weight: 700; color: #0f172a; }
+h3, .h3 { font-size: 1.25rem; font-weight: 700; color: #0f172a; }
+h4, .h4 { font-size: 1.12rem; font-weight: 600; color: #0f172a; }
+h5, .h5 { font-size: 1.02rem; font-weight: 600; }
+h6, .h6 { font-size: 0.92rem; font-weight: 600; }
+
+/* -------------------------------------------------------------
+ * Tarjetas Base y Componentes
+ * ----------------------------------------------------------- */
+.card,
+.content-card,
+.module-card,
+.audit-card,
+.distribution-card {
+    background: #ffffff !important;
+    border: 1px solid #eef2f6 !important;
+    border-radius: 16px !important;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03) !important;
+}
+
+/* Tarjetas KPI de Resumen */
+.kpi-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 1.35rem 1.45rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    min-height: 135px;
+}
+.kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+}
+.kpi-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.55rem;
+    flex-shrink: 0;
+}
+
+/* Tarjetas de Filtros y Formularios */
+.filter-card,
+.form-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.filter-card .form-control,
+.filter-card .form-select,
+.form-card .form-control,
+.form-card .form-select {
+    border-color: #cbd5e1;
+    font-size: 0.96rem;
+    border-radius: 8px;
+    min-height: 42px;
+}
+
+/* Tarjetas de Tablas */
+.table-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.table-card thead th {
+    background-color: #0f172a;
+    color: #f8fafc;
+    font-weight: 700;
+    font-size: 0.86rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    border-bottom: 0;
+    padding: 0.95rem 1rem;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.table-card tbody td {
+    padding: 0.9rem 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.95rem;
+}
+
+.table-card tbody tr:hover td {
+    background-color: #f8fafc;
+}
+
+/* Formularios Generales y Controles */
+.form-label {
+    font-size: 0.92rem;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+    color: #334155;
+}
+
+.form-control,
+.form-select {
+    font-size: 0.94rem;
+    border-radius: 10px;
+    border-color: #e2e8f0;
+    padding: 0.55rem 0.85rem;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.btn {
+    font-size: 0.92rem;
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 0.55rem 1rem;
+}
+
+.btn-sm {
+    font-size: 0.85rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 8px;
+}
+
+.badge {
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    border-radius: 8px;
+}
+
+/* Tablas Generales */
+.table {
+    font-size: 0.92rem;
+}
+
+.table thead th {
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #64748b;
+    background-color: #f8fafc;
+    border-bottom: 1px solid #eef2f6;
+    padding: 0.85rem 1rem;
+}
+
+.table tbody td {
+    padding: 0.85rem 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+/* Elementos Utilitarios */
+.avatar-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.92rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.badge-secuencia {
+    font-size: 0.85rem;
+    color: #475569;
+    font-weight: 600;
+    background: #f1f5f9;
+    padding: 0.35rem 0.65rem;
+    border-radius: 7px;
+}
+
+.required::after {
+    content: ' *';
+    color: #dc3545;
+}
+
+/* -------------------------------------------------------------
+ * Barra Lateral Izquierda Persistente (Sidebar)
+ * ----------------------------------------------------------- */
+.app-sidebar {
+    width: var(--app-sidebar-width);
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    background-color: var(--app-sidebar-bg);
+    border-right: 1px solid var(--app-border);
+    z-index: 1045;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app-sidebar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.app-sidebar::-webkit-scrollbar-thumb {
+    background-color: #e2e8f0;
+    border-radius: 4px;
+}
+
+.sidebar-brand-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.15rem 1.25rem 1rem;
+    text-decoration: none;
+    color: inherit;
+}
+
+.sidebar-brand-logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid #e2e8f0;
+}
+
+.sidebar-brand-text {
+    line-height: 1.2;
+    overflow: hidden;
+}
+
+.sidebar-brand-name {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-brand-sub {
+    font-size: 0.76rem;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.sidebar-nav-group {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 0.5rem;
+}
+
+.sidebar-nav-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
+    text-transform: uppercase;
+    padding: 1rem 1.25rem 0.35rem;
+    margin: 0;
+}
+
+.sidebar-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.52rem 0.85rem;
+    margin: 0.12rem 0.75rem;
+    border-radius: 10px;
+    text-decoration: none;
+    font-size: 0.91rem;
+    font-weight: 500;
+    color: #475569;
+    transition: all 0.15s ease;
+}
+
+.sidebar-nav-item i {
+    font-size: 1.12rem;
+    color: #64748b;
+    width: 20px;
+    text-align: center;
+    transition: color 0.15s ease;
+}
+
+.sidebar-nav-item:hover {
+    background-color: #f8fafc;
+    color: #0f172a;
+}
+
+.sidebar-nav-item:hover i {
+    color: #0f172a;
+}
+
+.sidebar-nav-item.active {
+    background-color: var(--app-nav-active-bg);
+    color: var(--app-nav-active-color);
+    font-weight: 600;
+}
+
+.sidebar-nav-item.active i {
+    color: var(--app-nav-active-color);
+}
+
+/* -------------------------------------------------------------
+ * Topbar de Navegación Sticky
+ * ----------------------------------------------------------- */
+.app-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+    background: rgba(244, 246, 248, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 0.85rem 2.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+@media (min-width: 992px) {
+    .app-topbar {
+        margin-left: var(--app-sidebar-width);
+    }
+    body > main,
+    main.container,
+    main.container-fluid,
+    main {
+        margin-left: var(--app-sidebar-width) !important;
+        margin-right: 0 !important;
+        width: calc(100% - var(--app-sidebar-width)) !important;
+        max-width: none !important;
+        padding-left: 2.25rem !important;
+        padding-right: 2.25rem !important;
+        padding-top: 0.5rem !important;
+    }
+    .sidebar-mobile-toggle {
+        display: none !important;
+    }
+}
+
+@media (max-width: 991px) {
+    .app-sidebar {
+        transform: translateX(-100%);
+    }
+    .app-sidebar.show {
+        transform: translateX(0);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
+    }
+    .app-topbar {
+        margin-left: 0;
+        justify-content: space-between;
+        background-color: #ffffff;
+        border-bottom: 1px solid var(--app-border);
+        padding: 0.65rem 1.25rem;
+    }
+    body > main,
+    main.container,
+    main.container-fluid,
+    main {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-left: 1.25rem !important;
+        padding-right: 1.25rem !important;
+    }
+}
+
+/* Backdrop para Móvil */
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.35);
+    z-index: 1040;
+    backdrop-filter: blur(2px);
+}
+
+.sidebar-backdrop.show {
+    display: block;
+}
+
+/* Menú de Usuario en Topbar */
+.user-menu-wrapper {
+    position: relative;
+}
+
+.user-menu-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    background: transparent;
+    border: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.user-menu-btn:hover {
+    background-color: rgba(226, 232, 240, 0.5);
+}
+
+.user-menu-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #dce5e9;
+}
+
+.user-menu-meta {
+    text-align: left;
+    line-height: 1.2;
+}
+
+.user-menu-name {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.user-menu-role {
+    font-size: 0.74rem;
+    color: #64748b;
+}
+
+.user-menu-chevron {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    transition: transform 0.2s ease;
+}
+
+/* Dropdown de Usuario */
+.user-dropdown-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    width: 220px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.08);
+    padding: 0.5rem;
+    display: none;
+    z-index: 1060;
+}
+
+.user-dropdown-menu.show {
+    display: block;
+    animation: dropdownFadeIn 0.15s ease;
+}
+
+@keyframes dropdownFadeIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.user-dropdown-header {
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid #f1f5f9;
+    margin-bottom: 0.35rem;
+}
+
+.user-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #334155;
+    text-decoration: none;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.user-dropdown-item:hover {
+    background-color: #f1f5f9;
+    color: #0f172a;
+}
+
+.user-dropdown-item.text-danger:hover {
+    background-color: #fef2f2;
+    color: #dc2626;
+}

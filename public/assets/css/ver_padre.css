@@ -1,0 +1,55 @@
+/**
+ * Estilos para ver_padre.php
+ * /assets/css/ver_padre.css
+ */
+
+body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+        .info-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+        }
+        .section-header {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        dt {
+            font-size: 0.96rem;
+            font-weight: 600;
+            color: #64748b;
+            padding-top: 0.35rem;
+            padding-bottom: 0.35rem;
+        }
+        dd {
+            font-size: 1.05rem;
+            font-weight: 500;
+            color: #0f172a;
+            padding-top: 0.35rem;
+            padding-bottom: 0.35rem;
+            margin-bottom: 0;
+        }
+        .table thead th {
+            font-size: 0.88rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #64748b;
+            background-color: #f8fafc;
+            padding: 0.75rem 1rem;
+            white-space: nowrap;
+        }
+        .table tbody td {
+            font-size: 0.98rem;
+            padding: 0.8rem 1rem;
+            vertical-align: middle;
+        }

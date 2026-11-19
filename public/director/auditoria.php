@@ -85,17 +85,17 @@ $stmt->execute($params);
 $movimientos = $stmt->fetchAll();
 $renderRows = static function (array $rows) use ($puedeEliminarAuditoria, $csrfToken): void {
     foreach ($rows as $movimiento) {
-        echo '<tr><td>' . htmlspecialchars($movimiento['creado_en']) . '</td>'
-            . '<td>' . htmlspecialchars($movimiento['usuario'] ?? 'Usuario eliminado') . '</td>'
-            . '<td>' . htmlspecialchars($movimiento['accion']) . '</td>'
+        echo '<tr><td class="font-monospace text-muted small" style="white-space: nowrap;">' . htmlspecialchars($movimiento['creado_en']) . '</td>'
+            . '<td class="fw-semibold text-dark">' . htmlspecialchars($movimiento['usuario'] ?? 'Usuario eliminado') . '</td>'
+            . '<td><span class="badge bg-light text-secondary border font-monospace" style="font-size: 0.85rem;">' . htmlspecialchars($movimiento['accion']) . '</span></td>'
             . '<td class="audit-details">' . nl2br(htmlspecialchars($movimiento['detalles'] ?? '')) . '</td>'
-            . '<td>' . htmlspecialchars($movimiento['ip_origen'] ?? '-') . '</td><td>';
+            . '<td class="font-monospace small text-muted">' . htmlspecialchars($movimiento['ip_origen'] ?? '-') . '</td><td>';
         if ($puedeEliminarAuditoria) {
             echo '<form method="POST" onsubmit="return confirm(\'¿Eliminar este registro de auditoría?\')">'
                 . '<input type="hidden" name="action" value="eliminar_auditoria">'
                 . '<input type="hidden" name="csrf_token" value="' . htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') . '">'
                 . '<input type="hidden" name="id" value="' . (int) $movimiento['id'] . '">'
-                . '<button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button></form>';
+                . '<button class="btn btn-sm btn-outline-danger px-2 py-1" style="font-size: 0.85rem; border-radius: 7px;" type="submit">Eliminar</button></form>';
         }
         echo '</td></tr>';
     }
@@ -112,98 +112,101 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Auditoría - Sistema Escolar</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="../assets/css/app.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>body { background:#f4f7fb;color:#172b4d; }.page-header { background:#172b4d;color:#fff; }.institution-brand { display:flex;align-items:center;gap:.6rem;white-space:nowrap; }.institution-brand img { width:42px;height:42px;object-fit:contain;border-radius:50%;background:#fff; }.institution-brand span { font-size:1.1rem;white-space:nowrap; }.header-user-photo { width:52px;height:52px;object-fit:cover;border:2px solid rgba(255,255,255,.85);border-radius:50%; }.audit-details { white-space:pre-wrap;min-width:18rem; } @media (max-width:768px) {.institution-brand span {font-size:.95rem;}}</style>
+    <link rel="stylesheet" href="../assets/css/auditoria.css">
 </head>
 <body>
 <?php render_app_header(panel_home_path(), '../asistente/logout.php'); ?>
-<main class="container py-4"><div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h1 class="h3 mb-1">Auditoría de movimientos</h1><p class="text-muted mb-0">Registro de accesos y cambios realizados en el sistema.</p></div><a href="<?= htmlspecialchars(panel_home_path()) ?>" class="btn btn-outline-primary">Volver al panel</a></div>
-<section class="card card-body shadow-sm border-0 mb-3">
-    <div class="row g-3 align-items-center">
-        <div class="col-md-8">
-            <div style="height: 22rem"><canvas id="activityChart" aria-label="Cantidad de acciones por usuario" role="img"></canvas></div>
-            <p id="activitySummary" class="text-muted text-center mt-2 mb-0" aria-live="polite">Cargando actividad...</p>
+<main class="container py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+                <i class="bi bi-clock-history text-primary"></i> Auditoría de Movimientos
+            </h1>
+            <p class="text-muted mb-0 small">Registro cronológico de accesos, modificaciones y transacciones.</p>
         </div>
-        <div class="col-md-4">
-            <form id="audit-filters" class="row g-2 align-items-end">
-                <div class="col-12"><label class="form-label" for="fecha_inicio">Desde</label><input class="form-control" type="date" id="fecha_inicio" name="fecha_inicio" value="<?= htmlspecialchars(is_string($fechaInicio) ? $fechaInicio : '') ?>"></div>
-                <div class="col-12"><label class="form-label" for="fecha_fin">Hasta</label><input class="form-control" type="date" id="fecha_fin" name="fecha_fin" value="<?= htmlspecialchars(is_string($fechaFin) ? $fechaFin : '') ?>"></div>
-                <div class="col-12"><label class="form-label" for="usuario_id">Usuario</label><select class="form-select" id="usuario_id" name="usuario_id"><option value="">Todos</option><?php foreach ($usuarios as $usuario): ?><option value="<?= (int) $usuario['id'] ?>" <?= (string) $usuarioId === (string) $usuario['id'] ? 'selected' : '' ?>><?= htmlspecialchars($usuario['nombres']) ?></option><?php endforeach; ?></select></div>
-                <div class="col-12"><label class="form-label" for="tipo_accion">Tipo de acción</label><select class="form-select" id="tipo_accion" name="tipo_accion"><option value="">Todas</option><?php foreach (['INSERT', 'UPDATE', 'DELETE'] as $tipo): ?><option value="<?= $tipo ?>" <?= $tipoAccion === $tipo ? 'selected' : '' ?>><?= $tipo ?></option><?php endforeach; ?></select></div>
-            </form>
-        </div>
+        <a href="<?= htmlspecialchars(panel_home_path()) ?>" class="btn btn-outline-primary d-inline-flex align-items-center gap-1 px-3 py-2 fw-semibold" style="border-radius: 10px; font-size: 0.96rem;">
+            <i class="bi bi-arrow-left"></i> Volver al Panel
+        </a>
     </div>
-</section>
-<section class="card shadow-sm border-0"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Fecha</th><th>Usuario</th><th>Movimiento</th><th>Detalles</th><th>IP</th><th>Acción</th></tr></thead><tbody id="audit-rows"><?php $renderRows($movimientos); ?></tbody></table></div></section></main>
-<script>
-const auditFilters = document.getElementById('audit-filters');
-const auditRows = document.getElementById('audit-rows');
-const activitySummary = document.getElementById('activitySummary');
-let auditRequest;
-let auditTimer;
-async function loadActivityChart() {
-    try {
-        const response = await fetch('auditoria.php?ajax=grafico', {
-            headers: { Accept: 'application/json' }
-        });
-        if (!response.ok) throw new Error('No se pudo cargar el gráfico de actividad.');
-        const activity = await response.json();
-        const highestIndex = activity.data.reduce(
-            (highest, count, index) => highest === -1 || count > activity.data[highest] ? index : highest,
-            -1
-        );
-        activitySummary.textContent = highestIndex >= 0 && activity.data[highestIndex] > 0
-            ? `Más cambios: ${activity.labels[highestIndex]} (${activity.data[highestIndex]})`
-            : 'Aún no hay cambios registrados.';
-        new Chart(document.getElementById('activityChart'), {
-            type: 'bar',
-            data: {
-                labels: activity.labels,
-                datasets: [{
-                    label: 'Acciones registradas',
-                    data: activity.data,
-                    backgroundColor: '#3b82f6'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
-            }
-        });
-    } catch (error) {
-        activitySummary.textContent = 'Error al cargar el gráfico de actividad.';
-        console.error(error);
-    }
-}
-async function refreshAudit() {
-    auditRequest?.abort();
-    auditRequest = new AbortController();
-    const query = new URLSearchParams(new FormData(auditFilters));
-    query.set('ajax', 'tabla');
-    try {
-        const response = await fetch(`auditoria.php?${query}`, {
-            headers: { Accept: 'text/html' },
-            signal: auditRequest.signal
-        });
-        if (!response.ok) throw new Error('No se pudo actualizar la auditoría.');
-        auditRows.innerHTML = await response.text();
-    } catch (error) {
-        if (error.name !== 'AbortError') {
-            auditRows.innerHTML = '<tr><td colspan="6" class="text-danger text-center">Error al cargar los registros.</td></tr>';
-            console.error(error);
-        }
-    }
-}
-loadActivityChart();
-auditFilters.addEventListener('input', () => {
-    clearTimeout(auditTimer);
-    auditTimer = setTimeout(refreshAudit, 250);
-});
-auditFilters.addEventListener('change', refreshAudit);
-</script>
+
+    <section class="card audit-card mb-4">
+        <div class="card-body p-4">
+            <div class="row g-4 align-items-center">
+                <div class="col-lg-8 border-end-lg">
+                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-bar-chart-line text-primary"></i> Actividad por Usuario</h5>
+                    <div style="height: 22rem;"><canvas id="activityChart" aria-label="Cantidad de acciones por usuario" role="img"></canvas></div>
+                    <p id="activitySummary" class="text-muted text-center mt-3 mb-0 fw-semibold" style="font-size: 0.95rem;" aria-live="polite">Cargando actividad...</p>
+                </div>
+                <div class="col-lg-4">
+                    <h5 class="fw-bold text-dark mb-3"><i class="bi bi-funnel text-primary"></i> Filtros de Auditoría</h5>
+                    <form id="audit-filters" class="row g-2 align-items-end">
+                        <div class="col-12">
+                            <label class="form-label" for="fecha_inicio">Desde</label>
+                            <input class="form-control" type="date" id="fecha_inicio" name="fecha_inicio" value="<?= htmlspecialchars(is_string($fechaInicio) ? $fechaInicio : '') ?>">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="fecha_fin">Hasta</label>
+                            <input class="form-control" type="date" id="fecha_fin" name="fecha_fin" value="<?= htmlspecialchars(is_string($fechaFin) ? $fechaFin : '') ?>">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="usuario_id">Usuario Responsable</label>
+                            <select class="form-select" id="usuario_id" name="usuario_id">
+                                <option value="">Todos los usuarios</option>
+                                <?php foreach ($usuarios as $usuario): ?>
+                                    <option value="<?= (int) $usuario['id'] ?>" <?= (string) $usuarioId === (string) $usuario['id'] ? 'selected' : '' ?>><?= htmlspecialchars($usuario['nombres']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="tipo_accion">Tipo de Acción</label>
+                            <select class="form-select" id="tipo_accion" name="tipo_accion">
+                                <option value="">Todas las acciones</option>
+                                <?php foreach (['INSERT', 'UPDATE', 'DELETE'] as $tipo): ?>
+                                    <option value="<?= $tipo ?>" <?= $tipoAccion === $tipo ? 'selected' : '' ?>><?= $tipo ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card audit-card">
+        <div class="card-header bg-white py-3 px-4 border-bottom">
+            <h5 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+                <i class="bi bi-list-columns-reverse text-primary"></i> Registros Recientes
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th style="min-width: 160px;">Fecha y Hora</th>
+                            <th style="min-width: 170px;">Usuario</th>
+                            <th style="min-width: 160px;">Movimiento</th>
+                            <th style="min-width: 280px;">Detalles</th>
+                            <th style="min-width: 120px;">IP Origen</th>
+                            <th style="min-width: 105px;">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="audit-rows"><?php $renderRows($movimientos); ?></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</main>
+<script src="../assets/js/auditoria.js" defer></script>
 </body>
 </html>

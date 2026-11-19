@@ -21,15 +21,47 @@
 
         try {
             const response = await fetch(url, {
-                headers: { Accept: 'text/html' },
+                headers: { Accept: 'application/json, text/html' },
                 signal: controller.signal
             });
             if (!response.ok) throw new Error('No se pudo actualizar la tabla.');
-            target.innerHTML = await response.text();
+
+            const contentType = response.headers.get('content-type') || '';
+            let payload = null;
+
+            if (contentType.includes('application/json')) {
+                payload = await response.json();
+                target.innerHTML = payload.html || '';
+            } else {
+                target.innerHTML = await response.text();
+                const xOps = response.headers.get('X-Total-Operaciones');
+                const xRec = response.headers.get('X-Total-Recaudado');
+                const xSal = response.headers.get('X-Total-Saldo');
+                if (xOps !== null || xRec !== null) {
+                    payload = {
+                        total_operaciones: xOps !== null ? parseInt(xOps, 10) : target.querySelectorAll('tr[data-pago-row]').length,
+                        total_recaudado: xRec !== null ? parseFloat(xRec) : null,
+                        total_saldo: xSal !== null ? parseFloat(xSal) : null,
+                        periodo_texto: response.headers.get('X-Periodo-Texto') ? decodeURIComponent(response.headers.get('X-Periodo-Texto')) : '',
+                        nivel_texto: response.headers.get('X-Nivel-Texto') ? decodeURIComponent(response.headers.get('X-Nivel-Texto')) : '',
+                        concepto_texto: response.headers.get('X-Concepto-Texto') ? decodeURIComponent(response.headers.get('X-Concepto-Texto')) : '',
+                    };
+                }
+            }
+
+            const eventDetail = payload || {
+                total_operaciones: target.querySelectorAll('tr[data-pago-row], tr:not([data-empty="true"])').length
+            };
+            form.dispatchEvent(new CustomEvent('liveFilterUpdated', { detail: eventDetail, bubbles: true }));
+            document.dispatchEvent(new CustomEvent('liveFilterUpdated', { detail: eventDetail, bubbles: true }));
+
             const countTarget = document.querySelector(form.dataset.liveCountTarget || '');
-            if (countTarget) {
+            if (countTarget && !form.dataset.customMetrics) {
                 const count = Array.from(target.children).filter((row) => !row.querySelector('td[colspan]')).length;
-                countTarget.textContent = `${count} ${count === 1 ? 'estudiante' : 'estudiantes'}`;
+                const singular = form.dataset.liveCountSingular || 'estudiante';
+                const plural = form.dataset.liveCountPlural || (singular === 'estudiante' ? 'estudiantes' : singular + 's');
+                const prefix = form.dataset.liveCountPrefix || '';
+                countTarget.textContent = `${prefix}${count} ${count === 1 ? singular : plural}`;
             }
         } catch (error) {
             if (error.name !== 'AbortError') console.error(error);

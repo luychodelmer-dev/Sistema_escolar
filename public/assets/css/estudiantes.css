@@ -1,0 +1,117 @@
+/**
+ * Estilos para estudiantes.php
+ * /assets/css/estudiantes.css
+ */
+
+body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            font-size: 1rem;
+        }
+        .kpi-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 1.35rem 1.45rem;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            min-height: 135px;
+        }
+        .kpi-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+        }
+        .kpi-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.55rem;
+            flex-shrink: 0;
+        }
+        .distribution-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 1.25rem 1.45rem;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        }
+        .filter-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        }
+        .filter-card .form-control,
+        .filter-card .form-select {
+            border-color: #cbd5e1;
+            font-size: 0.98rem;
+            border-radius: 8px;
+            min-height: 42px;
+        }
+        .filter-card .form-control:focus,
+        .filter-card .form-select:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+        .table-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        }
+        .table-card thead th {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-weight: 700;
+            font-size: 0.88rem;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            border-bottom: 0;
+            padding: 0.95rem 1rem;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        .table-card tbody td {
+            padding: 0.9rem 1rem;
+            vertical-align: middle;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.98rem;
+        }
+        .table-card tbody tr:hover td {
+            background-color: #f8fafc;
+        }
+        .avatar-circle {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            font-weight: 700;
+            font-size: 0.92rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            letter-spacing: -0.02em;
+        }
+        .badge-secuencia {
+            font-size: 0.85rem;
+            color: #475569;
+            font-weight: 600;
+            background: #f1f5f9;
+            padding: 0.35rem 0.65rem;
+            border-radius: 7px;
+        }
+        .student-link {
+            color: #0f172a;
+            font-size: 1.02rem;
+            font-weight: 700;
+            transition: color 0.15s ease;
+        }
+        .student-link:hover {
+            color: #2563eb;
+            text-decoration: underline;
+        }

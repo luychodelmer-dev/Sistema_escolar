@@ -1,0 +1,56 @@
+/**
+ * Estilos para cierre_academico.php
+ * /assets/css/cierre_academico.css
+ */
+
+.custom-pills .nav-link {
+    border-radius: 10px;
+    padding: 0.6rem 1.25rem;
+    font-weight: 600;
+    color: #475569;
+    transition: all 0.15s ease;
+}
+
+.custom-pills .nav-link.active {
+    background-color: #2563eb;
+    color: #ffffff !important;
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+}
+
+.nota-badge {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.nota-ad { background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.nota-a  { background-color: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.nota-b  { background-color: #fefce8; color: #a16207; border: 1px solid #fef08a; }
+.nota-c  { background-color: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+
+@media print {
+    .no-print, .app-sidebar, .app-topbar, .btn, form, #floatingDock {
+        display: none !important;
+    }
+    body, main {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+    }
+    .main-card {
+        box-shadow: none !important;
+        border: 1px solid #000000 !important;
+    }
+    .print-only {
+        display: block !important;
+    }
+}
+
+@media screen {
+    .print-only { display: none !important; }
+}

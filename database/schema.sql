@@ -14,6 +14,20 @@ CREATE TABLE IF NOT EXISTS usuario (
     actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS solicitud_reseteo_password (
+    id BIGSERIAL PRIMARY KEY,
+    usuario_id BIGINT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+    codigo VARCHAR(10) NOT NULL,
+    token VARCHAR(64) NOT NULL UNIQUE,
+    estado VARCHAR(20) NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobada', 'completada', 'rechazada')),
+    ip_solicitud VARCHAR(45),
+    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expira_en TIMESTAMP NOT NULL,
+    completado_en TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_solicitud_reseteo_codigo ON solicitud_reseteo_password(codigo);
+CREATE INDEX IF NOT EXISTS idx_solicitud_reseteo_token ON solicitud_reseteo_password(token);
+
 CREATE TABLE IF NOT EXISTS estudiante (
     id BIGSERIAL PRIMARY KEY,
     dni VARCHAR(8) NOT NULL UNIQUE,
@@ -28,7 +42,7 @@ ALTER TABLE estudiante ADD COLUMN IF NOT EXISTS estado_academico VARCHAR(20) NOT
 ALTER TABLE estudiante DROP CONSTRAINT IF EXISTS estudiante_estado_academico_check;
 ALTER TABLE estudiante
     ADD CONSTRAINT estudiante_estado_academico_check
-    CHECK (estado_academico IN ('Activo', 'Retirado', 'Trasladado'));
+    CHECK (estado_academico IN ('Activo', 'Retirado', 'Trasladado', 'Promoción', 'Promovido', 'Repitente', 'Recuperación'));
 ALTER TABLE usuario DROP CONSTRAINT IF EXISTS usuario_rol_check;
 ALTER TABLE usuario
     ADD CONSTRAINT usuario_rol_check
@@ -358,7 +372,7 @@ JOIN (VALUES
     ('Secundaria', 1, '1ro'), ('Secundaria', 2, '2do'), ('Secundaria', 3, '3ro'),
     ('Secundaria', 4, '4to'), ('Secundaria', 5, '5to')
 ) AS g(nivel, numero, nombre) ON g.nivel = n.nombre
-ON CONFLICT (nivel_id, numero) DO NOTHING;
+ON CONFLICT (nivel_id, numero) DO UPDATE SET nombre = EXCLUDED.nombre;
 INSERT INTO seccion (nombre) VALUES ('A'), ('B'), ('C')
 ON CONFLICT (nombre) DO NOTHING;
 INSERT INTO grado_seccion (grado_id, seccion_id)
@@ -386,5 +400,73 @@ INSERT INTO concepto_pago (descripcion, monto_total, monto_default, activo) VALU
 ON CONFLICT (descripcion) DO UPDATE
 SET monto_total = EXCLUDED.monto_total, monto_default = EXCLUDED.monto_default, activo = TRUE;
 UPDATE concepto_pago SET activo = FALSE WHERE LOWER(descripcion) = 'qaliwarma';
+
+CREATE TABLE IF NOT EXISTS curso (
+    id BIGSERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    grado VARCHAR(50) NOT NULL,
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS periodo_academico (
+    id BIGSERIAL PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL,
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE NOT NULL,
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS calificacion (
+    id BIGSERIAL PRIMARY KEY,
+    matricula_id BIGINT REFERENCES matricula(id) ON DELETE CASCADE,
+    curso_id BIGINT REFERENCES curso(id) ON DELETE RESTRICT,
+    periodo_id BIGINT REFERENCES periodo_academico(id) ON DELETE RESTRICT,
+    nota VARCHAR(10) NOT NULL CHECK (nota IN ('AD', 'A', 'B', 'C')),
+    observacion VARCHAR(250),
+    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (matricula_id, curso_id, periodo_id)
+);
+DO $$
+BEGIN
+    ALTER TABLE calificacion DROP CONSTRAINT IF EXISTS calificacion_nota_check;
+    ALTER TABLE calificacion ALTER COLUMN nota TYPE VARCHAR(10) USING nota::text;
+    ALTER TABLE calificacion ADD CONSTRAINT calificacion_nota_check CHECK (nota IN ('AD', 'A', 'B', 'C'));
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS recuperacion_academica (
+    id BIGSERIAL PRIMARY KEY,
+    matricula_id BIGINT NOT NULL REFERENCES matricula(id) ON DELETE CASCADE,
+    curso_id BIGINT NOT NULL REFERENCES curso(id) ON DELETE RESTRICT,
+    nota_final_regular VARCHAR(10) NOT NULL,
+    nota_recuperacion VARCHAR(10) CHECK (nota_recuperacion IN ('AD', 'A', 'B', 'C')),
+    estado VARCHAR(20) NOT NULL DEFAULT 'Pendiente' CHECK (estado IN ('Pendiente', 'Aprobado', 'Desaprobado')),
+    observacion VARCHAR(250),
+    evaluado_por BIGINT REFERENCES usuario(id) ON DELETE SET NULL,
+    creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (matricula_id, curso_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_recuperacion_matricula ON recuperacion_academica(matricula_id);
+CREATE INDEX IF NOT EXISTS idx_recuperacion_estado ON recuperacion_academica(estado);
+
+CREATE TABLE IF NOT EXISTS cierre_anual (
+    id BIGSERIAL PRIMARY KEY,
+    anio_id BIGINT NOT NULL REFERENCES anio(id) ON DELETE RESTRICT,
+    grado_seccion_id BIGINT NOT NULL REFERENCES grado_seccion(id) ON DELETE RESTRICT,
+    fecha_cierre TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    cerrado_por BIGINT REFERENCES usuario(id) ON DELETE SET NULL,
+    total_evaluados INT NOT NULL DEFAULT 0,
+    total_promovidos INT NOT NULL DEFAULT 0,
+    total_recuperacion INT NOT NULL DEFAULT 0,
+    total_repitentes INT NOT NULL DEFAULT 0,
+    total_promocion INT NOT NULL DEFAULT 0,
+    observaciones TEXT,
+    UNIQUE (anio_id, grado_seccion_id)
+);
 
 COMMIT;

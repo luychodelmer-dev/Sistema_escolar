@@ -1,0 +1,228 @@
+/**
+ * Sistema Escolar - I.E. Divino Maestro
+ * Estilos de Autenticación y Recuperación de Contraseña
+ * /assets/css/auth.css
+ */
+
+:root {
+    --ink: #172b4d;
+    --muted: #6b7a90;
+    --blue: #1261a0;
+    --aqua: #2bb3a3;
+    --mist: #edf5f7;
+}
+
+html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+}
+
+body.login-page,
+body.recovery-page {
+    min-height: 100vh;
+    color: var(--ink);
+    font-size: 1rem;
+    line-height: 1.55;
+    background: linear-gradient(rgba(255, 255, 255, .50), rgba(255, 255, 255, .50)), url("../images/institucion.jpg.jfif") center / cover fixed;
+    overflow-x: hidden;
+    margin: 0;
+    padding: 1.5rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.login-shell,
+.recovery-shell {
+    position: relative;
+    z-index: 1;
+    width: min(100% - 1rem, 510px);
+    animation: arrive .55s ease-out both;
+}
+
+@keyframes arrive {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateX(10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes logoFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+/* Encabezado Institucional */
+.institution-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.15rem;
+    text-align: left;
+}
+
+.institution-logo {
+    flex: 0 0 100px;
+    width: 100px;
+    height: 100px;
+    margin: 0;
+    object-fit: contain;
+    border-radius: 50%;
+    box-shadow: 0 6px 14px rgba(23, 43, 77, .18);
+    animation: logoFloat 3.5s ease-in-out infinite;
+    background: #ffffff;
+}
+
+.institution-name {
+    flex: 1;
+    margin: 0;
+    color: var(--ink);
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.32;
+    letter-spacing: -0.01em;
+    animation: fadeUp .7s .15s ease-out both;
+}
+
+@media (max-width: 480px) {
+    .institution-header {
+        gap: .75rem;
+    }
+    .institution-logo {
+        flex-basis: 80px;
+        width: 80px;
+        height: 80px;
+    }
+    .institution-name {
+        font-size: 1.12rem;
+    }
+}
+
+/* Tarjeta de Login y Recuperación */
+.login-card,
+.recovery-card {
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, .9);
+    border-radius: 12px;
+    background: rgba(247, 247, 247, .94);
+    box-shadow: 0 14px 30px rgba(23, 43, 77, .15);
+    overflow: hidden;
+    margin-top: 1.35rem;
+    padding: 1.5rem;
+}
+
+.login-card::before,
+.recovery-card::before {
+    display: block;
+    height: 4px;
+    content: "";
+    background: linear-gradient(90deg, #1264f5, #2bb3a3, #f4be8d);
+}
+
+.brand-mark,
+.login-card .text-center {
+    display: none;
+}
+
+.login-subtitle,
+.form-label {
+    color: var(--muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.form-control {
+    min-height: 50px;
+    padding: .75rem 1rem;
+    border-color: #cbd5e1;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.form-control:focus {
+    border-color: var(--aqua);
+    box-shadow: 0 0 0 .25rem rgba(43, 179, 163, .16);
+    transform: translateY(-1px);
+}
+
+.password-wrap {
+    position: relative;
+}
+
+.password-wrap .form-control {
+    padding-right: 85px;
+}
+
+.password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    border: 0;
+    color: #475569;
+    background: transparent;
+    font-size: .88rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+}
+
+.login-button {
+    min-height: 50px;
+    border: 0;
+    border-radius: 8px;
+    background: #1264f5;
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(18, 97, 160, .2);
+    transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+    font-size: 1.05rem;
+    font-weight: 600;
+    width: 100%;
+}
+
+.login-button:hover {
+    background: #0c53d6;
+    color: #ffffff;
+    box-shadow: 0 3px 7px rgba(18, 97, 160, .28);
+    transform: translateY(-2px);
+}
+
+.forgot-link {
+    display: block;
+    margin-top: .75rem;
+    color: #1264c7;
+    font-size: 0.95rem;
+    font-weight: 500;
+    text-align: center;
+    text-decoration: none;
+}
+
+.forgot-link:hover {
+    text-decoration: underline;
+}
+
+.badge-intranet {
+    background-color: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.35rem 0.65rem;
+    border-radius: 8px;
+    border: 1px solid #dbeafe;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.code-input {
+    letter-spacing: 0.35em;
+    font-size: 1.4rem;
+    font-weight: 700;
+    text-align: center;
+}

@@ -1,3 +1,7 @@
+# Configuración local de base de datos
 config/database.local.php
-configuracion/base_datos.local.php
 .env
+
+# Archivos temporales y de depuración
+scratch/
+*.log
