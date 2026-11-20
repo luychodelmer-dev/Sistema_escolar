@@ -1,6 +1,11 @@
 # Configuración local de base de datos
 config/database.local.php
 .env
+.env*.local
+
+# Dependencias y entornos de despliegue
+node_modules/
+.vercel/
 
 # Archivos temporales y de depuración
 scratch/
