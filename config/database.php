@@ -1,6 +1,7 @@
 <?php
 /**
  * Configuración de Conexión a la Base de Datos (PostgreSQL)
+ * Compatible con entornos locales, Vercel Serverless, Neon, Supabase y variables estándar.
  */
 
 $localConfigPath = __DIR__ . '/database.local.php';
@@ -10,27 +11,47 @@ if (file_exists($localConfigPath)) {
     $localConfig = require $localConfigPath;
 }
 
-$getVal = function(string $key, string $default = '') use ($localConfig): string {
-    $candidates = [
-        $localConfig[$key] ?? null,
-        $_ENV[$key] ?? null,
-        $_SERVER[$key] ?? null,
-        getenv($key) ?: null,
-    ];
-    foreach ($candidates as $cand) {
-        if ($cand !== null && $cand !== false && $cand !== '') {
-            return (string)$cand;
+// Función auxiliar para buscar entre múltiples alias y fuentes (ENV, SERVER, getenv)
+$findEnv = function(array $aliases, string $default = '') use ($localConfig): string {
+    foreach ($aliases as $alias) {
+        $val = $localConfig[$alias] 
+            ?? $_ENV[$alias] 
+            ?? $_SERVER[$alias] 
+            ?? getenv($alias);
+
+        if ($val !== false && $val !== null && trim((string)$val) !== '') {
+            return trim((string)$val);
         }
     }
     return $default;
 };
 
-$host     = $getVal('SISTEMA_ESCOLAR_DB_HOST', $localConfig['host'] ?? 'localhost');
-$port     = $getVal('SISTEMA_ESCOLAR_DB_PORT', $localConfig['port'] ?? '5432');
-$dbname   = $getVal('SISTEMA_ESCOLAR_DB_NAME', $localConfig['dbname'] ?? 'db_apafa_colegio');
-$username = $getVal('SISTEMA_ESCOLAR_DB_USER', $localConfig['username'] ?? 'postgres');
-$password = $getVal('SISTEMA_ESCOLAR_DB_PASSWORD', $localConfig['password'] ?? '');
-$sslmode  = $getVal('SISTEMA_ESCOLAR_DB_SSLMODE', $localConfig['sslmode'] ?? '');
+// 1. Comprobar si existe una URL de conexión completa (ej. DATABASE_URL, POSTGRES_URL)
+$connUrl = $findEnv(['DATABASE_URL', 'POSTGRES_URL', 'POSTGRES_PRISMA_URL', 'NEON_DATABASE_URL']);
+
+if (!empty($connUrl)) {
+    $parsed = parse_url($connUrl);
+    if ($parsed) {
+        $host     = $parsed['host'] ?? 'localhost';
+        $port     = (string)($parsed['port'] ?? '5432');
+        $username = $parsed['user'] ?? 'postgres';
+        $password = $parsed['pass'] ?? '';
+        $dbname   = ltrim($parsed['path'] ?? 'neondb', '/');
+        
+        parse_str($parsed['query'] ?? '', $queryParams);
+        $sslmode  = $queryParams['sslmode'] ?? 'require';
+    }
+}
+
+// 2. Si no viene en formato URL, buscar variable por variable con nombres habituales
+if (empty($host)) {
+    $host     = $findEnv(['SISTEMA_ESCOLAR_DB_HOST', 'DB_HOST', 'POSTGRES_HOST', 'PGHOST'], $localConfig['host'] ?? 'localhost');
+    $port     = $findEnv(['SISTEMA_ESCOLAR_DB_PORT', 'DB_PORT', 'POSTGRES_PORT', 'PGPORT'], $localConfig['port'] ?? '5432');
+    $dbname   = $findEnv(['SISTEMA_ESCOLAR_DB_NAME', 'DB_NAME', 'POSTGRES_DATABASE', 'PGDATABASE'], $localConfig['dbname'] ?? 'db_apafa_colegio');
+    $username = $findEnv(['SISTEMA_ESCOLAR_DB_USER', 'DB_USER', 'POSTGRES_USER', 'PGUSER'], $localConfig['username'] ?? 'postgres');
+    $password = $findEnv(['SISTEMA_ESCOLAR_DB_PASSWORD', 'DB_PASSWORD', 'POSTGRES_PASSWORD', 'PGPASSWORD'], $localConfig['password'] ?? '');
+    $sslmode  = $findEnv(['SISTEMA_ESCOLAR_DB_SSLMODE', 'DB_SSLMODE', 'PGSSLMODE'], $localConfig['sslmode'] ?? 'require');
+}
 
 try {
     $dsn = "pgsql:host={$host};port={$port};dbname={$dbname}";
@@ -41,11 +62,13 @@ try {
     $pdo = new PDO($dsn, $username, $password, [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_TIMEOUT            => 10,
     ]);
 } catch (PDOException $exception) {
     http_response_code(500);
     $maskedHost = htmlspecialchars($host);
     $maskedUser = htmlspecialchars($username);
-    $errorMsg = htmlspecialchars($exception->getMessage());
-    exit("No se pudo conectar con la base de datos.<br><small style='color:#666;'>Detalle: {$errorMsg} (Host intentado: {$maskedHost}, Usuario: {$maskedUser})</small>");
+    $maskedDb   = htmlspecialchars($dbname);
+    $errorMsg   = htmlspecialchars($exception->getMessage());
+    exit("No se pudo conectar con la base de datos.<br><small style='color:#666;'>Detalle: {$errorMsg} (Host intentado: {$maskedHost}, Base de datos: {$maskedDb}, Usuario: {$maskedUser})</small>");
 }
