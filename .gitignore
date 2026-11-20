@@ -5,3 +5,5 @@ config/database.local.php
 # Archivos temporales y de depuración
 scratch/
 *.log
+database/backup_*.sql
+backups/

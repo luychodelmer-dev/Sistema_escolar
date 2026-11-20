@@ -11,12 +11,18 @@ if (file_exists($localConfigPath)) {
 }
 
 $host     = $localConfig['host'] ?? getenv('SISTEMA_ESCOLAR_DB_HOST') ?: 'localhost';
-$dbname   = $localConfig['dbname'] ?? getenv('SISTEMA_ESCOLAR_DB_NAME') ?: 'sistema_escolar';
+$port     = $localConfig['port'] ?? getenv('SISTEMA_ESCOLAR_DB_PORT') ?: '5432';
+$dbname   = $localConfig['dbname'] ?? getenv('SISTEMA_ESCOLAR_DB_NAME') ?: 'db_apafa_colegio';
 $username = $localConfig['username'] ?? getenv('SISTEMA_ESCOLAR_DB_USER') ?: 'postgres';
 $password = $localConfig['password'] ?? getenv('SISTEMA_ESCOLAR_DB_PASSWORD') ?: '';
+$sslmode  = $localConfig['sslmode'] ?? getenv('SISTEMA_ESCOLAR_DB_SSLMODE') ?: '';
 
 try {
-    $dsn = "pgsql:host={$host};dbname={$dbname}";
+    $dsn = "pgsql:host={$host};port={$port};dbname={$dbname}";
+    if (!empty($sslmode)) {
+        $dsn .= ";sslmode={$sslmode}";
+    }
+
     $pdo = new PDO($dsn, $username, $password, [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
