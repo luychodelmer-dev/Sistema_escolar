@@ -9,7 +9,7 @@
 function require_auth(array $roles = []): void
 {
     if (!isset($_SESSION['user_id'])) {
-        header('Location: ../login.php');
+        header('Location: /login.php');
         exit;
     }
 
@@ -94,14 +94,30 @@ function registrar_auditoria(string $accion, string $detalles, ?int $usuarioId =
         return;
     }
 
-    $stmt = $pdo->prepare(
-        'INSERT INTO auditoria_movimiento (usuario_id, accion, detalles, ip_origen)
-         VALUES (:usuario_id, :accion, :detalles, :ip_origen)'
-    );
-    $stmt->execute([
-        'usuario_id' => $targetId,
-        'accion'     => $accion,
-        'detalles'   => $detalles,
-        'ip_origen'  => $_SERVER['REMOTE_ADDR'] ?? null,
-    ]);
+    try {
+        // Extraer y validar una IP única compatible con PostgreSQL inet
+        $rawIp = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+        $cleanIp = null;
+        if (!empty($rawIp)) {
+            $parts = explode(',', $rawIp);
+            $firstIp = trim($parts[0]);
+            if (filter_var($firstIp, FILTER_VALIDATE_IP)) {
+                $cleanIp = $firstIp;
+            }
+        }
+
+        $stmt = $pdo->prepare(
+            'INSERT INTO auditoria_movimiento (usuario_id, accion, detalles, ip_origen)
+             VALUES (:usuario_id, :accion, :detalles, :ip_origen)'
+        );
+        $stmt->execute([
+            'usuario_id' => $targetId,
+            'accion'     => $accion,
+            'detalles'   => $detalles,
+            'ip_origen'  => $cleanIp,
+        ]);
+    } catch (\Throwable $e) {
+        // La auditoría no debe bloquear el flujo principal de la aplicación
+        error_log('Error al registrar auditoría: ' . $e->getMessage());
+    }
 }

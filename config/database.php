@@ -54,7 +54,8 @@ if (empty($host)) {
     $dbname   = $findEnv(['SISTEMA_ESCOLAR_DB_NAME', 'DB_NAME', 'POSTGRES_DATABASE', 'PGDATABASE'], $localConfig['dbname'] ?? 'db_apafa_colegio');
     $username = $findEnv(['SISTEMA_ESCOLAR_DB_USER', 'DB_USER', 'POSTGRES_USER', 'PGUSER'], $localConfig['username'] ?? 'postgres');
     $password = $findEnv(['SISTEMA_ESCOLAR_DB_PASSWORD', 'DB_PASSWORD', 'POSTGRES_PASSWORD', 'PGPASSWORD'], $localConfig['password'] ?? '');
-    $sslmode  = $findEnv(['SISTEMA_ESCOLAR_DB_SSLMODE', 'DB_SSLMODE', 'PGSSLMODE'], $localConfig['sslmode'] ?? 'require');
+    $defaultSsl = ($host === 'localhost' || $host === '127.0.0.1') ? 'prefer' : 'require';
+    $sslmode  = $findEnv(['SISTEMA_ESCOLAR_DB_SSLMODE', 'DB_SSLMODE', 'PGSSLMODE'], $localConfig['sslmode'] ?? $defaultSsl);
 }
 
 // 3. Soporte automático para SNI de Neon cuando el host pertenece a neon.tech

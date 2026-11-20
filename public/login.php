@@ -27,13 +27,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['p_editar'] = !empty($usuario['permiso_editar'] ?? false);
             registrar_auditoria('inicio_sesion', 'Inicio de sesión correcto.');
 
+            // Asegurar que la sesión se escriba en PostgreSQL antes del redirect
+            session_write_close();
+
             // Redirigimos según el rol (Director o Asistente)
             if (in_array($usuario['rol'], ['director', 'hiperadmin'], true)) {
-                $publicPath = defined('APP_PUBLIC_PATH') ? APP_PUBLIC_PATH : '';
-                header("Location: {$publicPath}director/panel.php");
+                header("Location: /director/panel.php");
             } else {
-                $publicPath = defined('APP_PUBLIC_PATH') ? APP_PUBLIC_PATH : '';
-                header("Location: {$publicPath}asistente/panel.php");
+                header("Location: /asistente/panel.php");
             }
             exit;
         } else {
@@ -79,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <form method="POST">
                 <div class="mb-1">
                     <label for="correo" class="visually-hidden">Correo electrónico</label>
-                    <input type="email" class="form-control" id="correo" name="correo" placeholder="Correo electrónico" autocomplete="email" required>
+                    <input type="email" class="form-control" id="correo" name="correo" value="<?= htmlspecialchars($correo ?? '') ?>" placeholder="Correo electrónico" autocomplete="email" required>
                 </div>
                 <div class="mb-2">
                     <label for="password" class="visually-hidden">Contraseña</label>
