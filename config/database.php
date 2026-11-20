@@ -61,18 +61,16 @@ if (empty($host)) {
 $endpointId = '';
 if (strpos($host, '.neon.tech') !== false) {
     $parts = explode('.', $host);
-    $firstPart = $parts[0] ?? '';
-    $endpointId = preg_replace('/-pooler$/', '', $firstPart);
+    $endpointId = $parts[0] ?? ''; // Preserva -pooler si se conecta a través del connection pooler (PgBouncer)
 } elseif (!empty($options) && preg_match('/endpoint=([a-zA-Z0-9\-]+)/', $options, $m)) {
     $endpointId = $m[1];
 }
 
 // Solución oficial de Neon para clientes / libpq sin soporte nativo de SNI:
-// Se antepone "endpoint=<endpoint_id>;" a la contraseña. El proxy de Neon intercepta
-// esta información y enruta la conexión al compute correspondiente.
+// Se antepone "endpoint=<endpoint_id>$" a la contraseña (el delimitador $ es requerido por PgBouncer de Neon).
 if (!empty($endpointId)) {
     if (strpos($password, 'endpoint=') === false) {
-        $password = "endpoint={$endpointId};" . $password;
+        $password = "endpoint={$endpointId}$" . $password;
     }
 }
 
