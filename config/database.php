@@ -35,8 +35,8 @@ if (!empty($connUrl)) {
     if ($parsed) {
         $host     = $parsed['host'] ?? 'localhost';
         $port     = (string)($parsed['port'] ?? '5432');
-        $username = $parsed['user'] ?? 'postgres';
-        $password = $parsed['pass'] ?? '';
+        $username = isset($parsed['user']) ? urldecode($parsed['user']) : 'postgres';
+        $password = isset($parsed['pass']) ? urldecode($parsed['pass']) : '';
         $dbname   = ltrim($parsed['path'] ?? 'neondb', '/');
         
         parse_str($parsed['query'] ?? '', $queryParams);
@@ -57,13 +57,22 @@ if (empty($host)) {
     $sslmode  = $findEnv(['SISTEMA_ESCOLAR_DB_SSLMODE', 'DB_SSLMODE', 'PGSSLMODE'], $localConfig['sslmode'] ?? 'require');
 }
 
-// 3. Soporte automático para SNI de Neon si el host pertenece a neon.tech
-if (empty($options) && strpos($host, '.neon.tech') !== false) {
+// 3. Soporte automático para SNI de Neon cuando el host pertenece a neon.tech
+$endpointId = '';
+if (strpos($host, '.neon.tech') !== false) {
     $parts = explode('.', $host);
     $firstPart = $parts[0] ?? '';
     $endpointId = preg_replace('/-pooler$/', '', $firstPart);
-    if (!empty($endpointId)) {
-        $options = 'endpoint=' . $endpointId;
+} elseif (!empty($options) && preg_match('/endpoint=([a-zA-Z0-9\-]+)/', $options, $m)) {
+    $endpointId = $m[1];
+}
+
+// Solución oficial de Neon para clientes / libpq sin soporte nativo de SNI:
+// Se antepone "endpoint=<endpoint_id>;" a la contraseña. El proxy de Neon intercepta
+// esta información y enruta la conexión al compute correspondiente.
+if (!empty($endpointId)) {
+    if (strpos($password, 'endpoint=') === false) {
+        $password = "endpoint={$endpointId};" . $password;
     }
 }
 
@@ -71,10 +80,6 @@ try {
     $dsn = "pgsql:host={$host};port={$port};dbname={$dbname}";
     if (!empty($sslmode)) {
         $dsn .= ";sslmode={$sslmode}";
-    }
-    if (!empty($options)) {
-        // En DSN de PDO PostgreSQL el parámetro de options requiere codificación
-        $dsn .= ";options=" . urlencode($options);
     }
 
     $pdo = new PDO($dsn, $username, $password, [
