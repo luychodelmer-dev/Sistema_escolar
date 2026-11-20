@@ -91,9 +91,5 @@ try {
     $maskedUser = htmlspecialchars($username);
     $maskedDb   = htmlspecialchars($dbname);
     $errorMsg   = htmlspecialchars($exception->getMessage());
-    $rawPassPart = substr($password, strlen("endpoint={$endpointId}$"));
-    $rawLen      = strlen($rawPassPart);
-    $rawStarts   = htmlspecialchars(substr($rawPassPart, 0, 4));
-    $rawEnds     = htmlspecialchars(substr($rawPassPart, -4));
-    exit("No se pudo conectar con la base de datos.<br><small style='color:#666;'>Detalle: {$errorMsg} (Host: {$maskedHost}, BD: {$maskedDb}, User: {$maskedUser}, Longitud pass: {$rawLen}, Inicia: [{$rawStarts}], Termina: [{$rawEnds}])</small>");
+    exit("No se pudo conectar con la base de datos.<br><small style='color:#666;'>Detalle: {$errorMsg} (Host intentado: {$maskedHost}, Base de datos: {$maskedDb}, Usuario: {$maskedUser})</small>");
 }
