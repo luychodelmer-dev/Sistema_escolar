@@ -1,7 +1,7 @@
 <?php
 /**
  * Configuración de Conexión a la Base de Datos (PostgreSQL)
- * Compatible con entornos locales, Vercel Serverless, Neon, Supabase y variables estándar.
+ * Compatible con entornos locales, Vercel Serverless, Neon (con soporte SNI automático), Supabase, etc.
  */
 
 $localConfigPath = __DIR__ . '/database.local.php';
@@ -28,6 +28,7 @@ $findEnv = function(array $aliases, string $default = '') use ($localConfig): st
 
 // 1. Comprobar si existe una URL de conexión completa (ej. DATABASE_URL, POSTGRES_URL)
 $connUrl = $findEnv(['DATABASE_URL', 'POSTGRES_URL', 'POSTGRES_PRISMA_URL', 'NEON_DATABASE_URL']);
+$options = '';
 
 if (!empty($connUrl)) {
     $parsed = parse_url($connUrl);
@@ -40,10 +41,13 @@ if (!empty($connUrl)) {
         
         parse_str($parsed['query'] ?? '', $queryParams);
         $sslmode  = $queryParams['sslmode'] ?? 'require';
+        if (!empty($queryParams['options'])) {
+            $options = $queryParams['options'];
+        }
     }
 }
 
-// 2. Si no viene en formato URL, buscar variable por variable con nombres habituales
+// 2. Si no viene en formato URL, buscar variable por variable
 if (empty($host)) {
     $host     = $findEnv(['SISTEMA_ESCOLAR_DB_HOST', 'DB_HOST', 'POSTGRES_HOST', 'PGHOST'], $localConfig['host'] ?? 'localhost');
     $port     = $findEnv(['SISTEMA_ESCOLAR_DB_PORT', 'DB_PORT', 'POSTGRES_PORT', 'PGPORT'], $localConfig['port'] ?? '5432');
@@ -53,10 +57,24 @@ if (empty($host)) {
     $sslmode  = $findEnv(['SISTEMA_ESCOLAR_DB_SSLMODE', 'DB_SSLMODE', 'PGSSLMODE'], $localConfig['sslmode'] ?? 'require');
 }
 
+// 3. Soporte automático para SNI de Neon si el host pertenece a neon.tech
+if (empty($options) && strpos($host, '.neon.tech') !== false) {
+    $parts = explode('.', $host);
+    $firstPart = $parts[0] ?? '';
+    $endpointId = preg_replace('/-pooler$/', '', $firstPart);
+    if (!empty($endpointId)) {
+        $options = 'endpoint=' . $endpointId;
+    }
+}
+
 try {
     $dsn = "pgsql:host={$host};port={$port};dbname={$dbname}";
     if (!empty($sslmode)) {
         $dsn .= ";sslmode={$sslmode}";
+    }
+    if (!empty($options)) {
+        // En DSN de PDO PostgreSQL el parámetro de options requiere codificación
+        $dsn .= ";options=" . urlencode($options);
     }
 
     $pdo = new PDO($dsn, $username, $password, [
