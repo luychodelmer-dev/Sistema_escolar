@@ -10,11 +10,11 @@ require_once __DIR__ . '/../../app/header.php';
 
 // Validar seguridad (ajusta esto si tu auth.php lo maneja distinto)
 require_auth(['asistente', 'director']);
-$puedeEditar = has_permission('p_editar');
+$puedeEditar = has_permission('p_padres');
 $csrfToken = $_SESSION['csrf_token'] ??= bin2hex(random_bytes(32));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete') {
-    require_permission('p_editar');
+    require_permission('p_padres');
     $submittedToken = $_POST['csrf_token'] ?? '';
     if (!is_string($submittedToken) || !hash_equals($csrfToken, $submittedToken)) {
         http_response_code(400);
@@ -161,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
 }
 
 if (($_GET['ajax'] ?? '') === 'principal_candidates') {
-    require_permission('p_editar');
+    require_permission('p_padres');
     header('Content-Type: application/json; charset=utf-8');
     $studentId = filter_var($_GET['student_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
     $responsibleId = filter_var($_GET['responsable_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);

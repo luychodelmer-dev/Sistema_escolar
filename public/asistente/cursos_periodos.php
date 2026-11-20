@@ -4,7 +4,7 @@ require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/header.php';
 
 require_auth(['asistente', 'director', 'hiperadmin', 'administrador']);
-require_permission('p_matricular');
+require_permission('p_cursos_periodos');
 
 $csrfToken = $_SESSION['csrf_token'] ??= bin2hex(random_bytes(32));
 $error = '';

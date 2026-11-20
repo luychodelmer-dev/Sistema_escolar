@@ -11,7 +11,7 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php");
     exit;
 }
-require_permission('p_editar');
+require_permission('p_padres');
 
 $csrfToken = $_SESSION['csrf_token'] ??= bin2hex(random_bytes(32));
 $mensaje_exito = '';

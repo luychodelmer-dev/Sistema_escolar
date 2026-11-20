@@ -11,8 +11,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
 
     if (!empty($correo) && !empty($password)) {
-        // Buscamos al usuario por su correo en la base de datos
-        $stmt = $pdo->prepare("SELECT * FROM usuario WHERE correo = :correo AND estado = TRUE");
+        // Buscamos al usuario por su correo insensible a mayúsculas
+        $stmt = $pdo->prepare("SELECT * FROM usuario WHERE LOWER(TRIM(correo)) = LOWER(:correo) AND estado = TRUE");
         $stmt->execute(['correo' => $correo]);
         $usuario = $stmt->fetch();
 
@@ -27,8 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['p_editar'] = !empty($usuario['permiso_editar'] ?? false);
             registrar_auditoria('inicio_sesion', 'Inicio de sesión correcto.');
 
-            // Asegurar que la sesión se escriba en PostgreSQL antes del redirect
-            session_write_close();
+            // Persistir inmediatamente la sesión en la cookie firmada (Serverless)
+            save_stateless_session();
 
             // Redirigimos según el rol (Director o Asistente)
             if (in_array($usuario['rol'], ['director', 'hiperadmin'], true)) {

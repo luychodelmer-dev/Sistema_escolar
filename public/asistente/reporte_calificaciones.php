@@ -4,7 +4,7 @@ require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/header.php';
 
 require_auth(['asistente', 'director', 'hiperadmin', 'administrador']);
-require_permission('p_matricular');
+require_permission('p_calificar');
 
 // AJAX para cascading dropdowns
 if (isset($_GET['ajax']) && in_array($_GET['ajax'], ['grados', 'secciones'], true)) {

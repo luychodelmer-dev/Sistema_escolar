@@ -1,7 +1,6 @@
 <?php
 require_once __DIR__ . '/../../app/bootstrap.php';
-session_unset();
-session_destroy();
+destroy_stateless_session();
 header("Location: /login.php");
 exit;
 ?>

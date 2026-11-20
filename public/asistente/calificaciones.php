@@ -5,7 +5,7 @@ require_once __DIR__ . '/../../app/header.php';
 require_once __DIR__ . '/../../app/services/calificaciones_service.php';
 
 require_auth(['asistente', 'director', 'hiperadmin', 'administrador']);
-require_permission('p_matricular');
+require_permission('p_calificar');
 
 // Migración y AJAX
 asegurar_esquema_calificaciones($pdo);

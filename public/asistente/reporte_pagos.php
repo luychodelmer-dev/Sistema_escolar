@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/header.php';
 
 require_auth(['asistente', 'director', 'hiperadmin']);
+require_permission('p_reportes_caja');
 
 // Opciones de conceptos para el filtro
 $conceptos = $pdo->query('SELECT id, descripcion FROM concepto_pago ORDER BY descripcion ASC')->fetchAll();

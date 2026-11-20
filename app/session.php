@@ -1,135 +1,149 @@
 <?php
 /**
- * Gestor de Sesiones Persistentes para Entornos Serverless y Tradicionales
- * Almacena las sesiones en PostgreSQL (Neon) para que persistan entre invocaciones lambda en Vercel.
+ * Gestor de Sesiones Stateless y Persistentes para Serverless (Vercel)
+ * Utiliza cookies firmadas criptográficamente con HMAC-SHA256
+ * para garantizar latencia cero y persistencia absoluta entre funciones lambda.
  */
 
-class PdoSessionHandler implements SessionHandlerInterface
+const SESSION_COOKIE_NAME = 'sistema_auth_token';
+const SESSION_SECRET_SALT = 'colegio_divino_maestro_sec_2026_x89a';
+
+/**
+ * Inicializa la sesión PHP estándar con atributos de seguridad.
+ */
+function init_app_session(?PDO $pdo = null): void
 {
-    private PDO $pdo;
-    private string $table;
-    private static bool $tableReady = false;
+    if (session_status() === PHP_SESSION_NONE) {
+        $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+            || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443);
 
-    public function __construct(PDO $pdo, string $table = 'session_storage')
-    {
-        $this->pdo = $pdo;
-        $this->table = $table;
-        $this->ensureTable();
+        session_set_cookie_params([
+            'lifetime' => 86400 * 7,
+            'path'     => '/',
+            'domain'   => '',
+            'secure'   => $isHttps,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+
+        session_start();
     }
 
-    private function ensureTable(): void
-    {
-        if (self::$tableReady) {
-            return;
-        }
+    // Cargar automáticamente los datos desde la cookie firmada
+    load_stateless_session();
+}
 
-        try {
-            $this->pdo->exec("
-                CREATE TABLE IF NOT EXISTS session_storage (
-                    id VARCHAR(128) PRIMARY KEY,
-                    data TEXT NOT NULL,
-                    last_activity BIGINT NOT NULL
-                )
-            ");
-            self::$tableReady = true;
-        } catch (\Throwable $e) {
-            // Silencioso si la tabla ya existe o se carece de permisos DDL
-        }
+/**
+ * Genera la clave secreta para firmar la cookie.
+ */
+function get_session_secret(): string
+{
+    $envSecret = getenv('DATABASE_URL') ?: getenv('SISTEMA_ESCOLAR_DB_PASSWORD') ?: 'default_salt_key_dm_2026';
+    return hash('sha256', $envSecret . SESSION_SECRET_SALT);
+}
+
+/**
+ * Carga los datos de sesión desde la cookie firmada si existen.
+ */
+function load_stateless_session(): void
+{
+    if (empty($_COOKIE[SESSION_COOKIE_NAME])) {
+        return;
     }
 
-    public function open(string $path, string $name): bool
-    {
-        return true;
+    $raw = (string)$_COOKIE[SESSION_COOKIE_NAME];
+    $parts = explode('.', $raw, 2);
+    if (count($parts) !== 2) {
+        return;
     }
 
-    public function close(): bool
-    {
-        return true;
+    [$payloadB64, $signature] = $parts;
+    $expectedSig = hash_hmac('sha256', $payloadB64, get_session_secret());
+
+    if (!hash_equals($expectedSig, $signature)) {
+        return;
     }
 
-    public function read(string $id): string|false
-    {
-        try {
-            $expire = time() - (86400 * 7); // Expira a los 7 días de inactividad
-            $stmt = $this->pdo->prepare("SELECT data FROM session_storage WHERE id = :id AND last_activity > :expire");
-            $stmt->execute(['id' => $id, 'expire' => $expire]);
-            $data = $stmt->fetchColumn();
-            return $data !== false ? (string)$data : '';
-        } catch (\Throwable $e) {
-            return '';
-        }
+    $json = base64_decode($payloadB64, true);
+    if (!$json) {
+        return;
     }
 
-    public function write(string $id, string $data): bool
-    {
-        try {
-            $stmt = $this->pdo->prepare("
-                INSERT INTO session_storage (id, data, last_activity)
-                VALUES (:id, :data, :time)
-                ON CONFLICT (id) DO UPDATE 
-                SET data = EXCLUDED.data, last_activity = EXCLUDED.last_activity
-            ");
-            return $stmt->execute([
-                'id' => $id,
-                'data' => $data,
-                'time' => time(),
-            ]);
-        } catch (\Throwable $e) {
-            return false;
-        }
+    $data = json_decode($json, true);
+    if (!is_array($data)) {
+        return;
     }
 
-    public function destroy(string $id): bool
-    {
-        try {
-            $stmt = $this->pdo->prepare("DELETE FROM session_storage WHERE id = :id");
-            return $stmt->execute(['id' => $id]);
-        } catch (\Throwable $e) {
-            return false;
-        }
+    // Verificar expiración (7 días)
+    if (isset($data['_exp']) && time() > (int)$data['_exp']) {
+        return;
     }
 
-    public function gc(int $max_lifetime): int|false
-    {
-        try {
-            $expire = time() - $max_lifetime;
-            $stmt = $this->pdo->prepare("DELETE FROM session_storage WHERE last_activity < :expire");
-            $stmt->execute(['expire' => $expire]);
-            return (int)$stmt->rowCount();
-        } catch (\Throwable $e) {
-            return false;
+    // Hidratar $_SESSION
+    foreach ($data as $key => $val) {
+        if ($key !== '_exp') {
+            $_SESSION[$key] = $val;
         }
     }
 }
 
 /**
- * Inicializa la sesión con cookies seguras y almacenamiento en base de datos.
+ * Guarda los datos de sesión actuales en la cookie firmada.
  */
-function init_app_session(?PDO $pdo = null): void
+function save_stateless_session(): void
 {
-    if (session_status() === PHP_SESSION_ACTIVE) {
+    $data = $_SESSION ?? [];
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+        || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443);
+
+    if (empty($data)) {
+        if (isset($_COOKIE[SESSION_COOKIE_NAME])) {
+            setcookie(SESSION_COOKIE_NAME, '', [
+                'expires'  => time() - 3600,
+                'path'     => '/',
+                'secure'   => $isHttps,
+                'httponly' => true,
+                'samesite' => 'Lax'
+            ]);
+        }
         return;
     }
 
+    $data['_exp'] = time() + (86400 * 7); // 7 días de validez
+    $payloadB64 = base64_encode(json_encode($data));
+    $signature = hash_hmac('sha256', $payloadB64, get_session_secret());
+    $cookieValue = $payloadB64 . '.' . $signature;
+
+    setcookie(SESSION_COOKIE_NAME, $cookieValue, [
+        'expires'  => time() + (86400 * 7),
+        'path'     => '/',
+        'secure'   => $isHttps,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+}
+
+/**
+ * Destruye la sesión firmada y la sesión PHP.
+ */
+function destroy_stateless_session(): void
+{
+    $_SESSION = [];
     $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
         || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
-        || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+        || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443);
 
-    // Configurar parámetros de cookie seguros para compatibilidad con Vercel
-    session_set_cookie_params([
-        'lifetime' => 86400 * 7,
+    setcookie(SESSION_COOKIE_NAME, '', [
+        'expires'  => time() - 3600,
         'path'     => '/',
-        'domain'   => '',
         'secure'   => $isHttps,
         'httponly' => true,
         'samesite' => 'Lax'
     ]);
 
-    // Registrar manejador de sesión persistente en PostgreSQL si PDO está disponible
-    if ($pdo instanceof PDO) {
-        $handler = new PdoSessionHandler($pdo);
-        session_set_save_handler($handler, true);
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_destroy();
     }
-
-    session_start();
 }

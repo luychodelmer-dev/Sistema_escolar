@@ -5,7 +5,51 @@ require_once __DIR__ . '/../../app/header.php';
 
 require_director();
 
-$permisos = $pdo->query('SELECT id, codigo, nombre FROM permisos WHERE activo = TRUE ORDER BY nombre')->fetchAll();
+$permisos = $pdo->query('
+    SELECT id, codigo, nombre, descripcion, COALESCE(modulo, \'general\') AS modulo, COALESCE(icono, \'bi-shield-check\') AS icono, COALESCE(orden, 10) AS orden 
+    FROM permisos 
+    WHERE activo = TRUE 
+    ORDER BY orden ASC, nombre ASC
+')->fetchAll();
+
+$modulosDef = [
+    'estudiantes' => [
+        'titulo' => 'Estudiantes y Familias',
+        'icono' => 'bi-people-fill',
+        'badge' => 'primary',
+        'desc' => 'Gestión de expedientes de alumnos, padres y apoderados',
+    ],
+    'matriculas' => [
+        'titulo' => 'Matrículas y Plan Académico',
+        'icono' => 'bi-journal-check',
+        'badge' => 'success',
+        'desc' => 'Inscripciones por año lectivo, aulas y asignaturas',
+    ],
+    'calificaciones' => [
+        'titulo' => 'Evaluaciones y Calificaciones',
+        'icono' => 'bi-card-checklist',
+        'badge' => 'warning',
+        'desc' => 'Registro de notas oficiales (AD, A, B, C) y cierre',
+    ],
+    'pagos' => [
+        'titulo' => 'Caja y Finanzas',
+        'icono' => 'bi-cash-coin',
+        'badge' => 'info',
+        'desc' => 'Cobros de pensiones, cuota APAFA y reportes de caja',
+    ],
+    'auditoria' => [
+        'titulo' => 'Seguridad y Auditoría',
+        'icono' => 'bi-shield-lock-fill',
+        'badge' => 'secondary',
+        'desc' => 'Supervisión de bitácora y movimientos de usuarios',
+    ],
+];
+
+$permisosAgrupados = [];
+foreach ($permisos as $p) {
+    $mod = $p['modulo'] ?? 'general';
+    $permisosAgrupados[$mod][] = $p;
+}
 $tokenCsrf = $_SESSION['csrf_token'] ??= bin2hex(random_bytes(32));
 $mensaje = $_SESSION['flash_message'] ?? '';
 unset($_SESSION['flash_message']);
@@ -142,14 +186,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $asistentes = $pdo->query("SELECT id, nombres, correo, estado FROM usuario WHERE rol = 'asistente' ORDER BY nombres")->fetchAll();
 $asignaciones = $pdo->query(
-    'SELECT asignacion.usuario_id, permiso.id AS permiso_id, permiso.nombre
+    'SELECT asignacion.usuario_id, permiso.id AS permiso_id, permiso.codigo, permiso.nombre, COALESCE(permiso.modulo, \'general\') AS modulo
      FROM usuario_permisos AS asignacion
      JOIN permisos AS permiso ON permiso.id = asignacion.permiso_id
-     ORDER BY permiso.nombre'
+     ORDER BY COALESCE(permiso.orden, 10) ASC, permiso.nombre ASC'
 )->fetchAll();
 $mapa = [];
 foreach ($asignaciones as $asignacion) {
-    $mapa[$asignacion['usuario_id']][(int) $asignacion['permiso_id']] = $asignacion['nombre'];
+    $mapa[$asignacion['usuario_id']][(int) $asignacion['permiso_id']] = [
+        'nombre' => $asignacion['nombre'],
+        'codigo' => $asignacion['codigo'],
+        'modulo' => $asignacion['modulo'],
+    ];
 }
 
 $solicitudesPendientes = [];
@@ -313,17 +361,68 @@ try {
                     <input class="form-control font-monospace" id="password" name="password" type="password" minlength="8" autocomplete="new-password" required placeholder="Mínimo 8 caracteres">
                 </div>
                 <fieldset class="col-12 mt-3">
-                    <legend class="form-label fw-bold fs-6 mb-2">Permisos a Asignar</legend>
-                    <div class="d-flex flex-wrap gap-4 p-3 rounded-3 bg-light border">
-                        <?php foreach ($permisos as $permiso): ?>
-                            <label class="form-check d-flex align-items-center gap-2 mb-0">
-                                <input class="form-check-input mt-0" type="checkbox" name="permisos[]" value="<?= (int) $permiso['id'] ?>">
-                                <span class="form-check-label fw-semibold text-dark"><?= htmlspecialchars($permiso['nombre']) ?></span>
-                            </label>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                        <div>
+                            <legend class="form-label fw-bold fs-6 mb-0 text-dark d-flex align-items-center gap-2">
+                                <i class="bi bi-shield-check text-primary"></i> Permisos Granulares
+                            </legend>
+                            <small class="text-muted">Elige los accesos o selecciona una plantilla rápida según su función:</small>
+                        </div>
+                        <div class="d-flex flex-wrap gap-1">
+                            <span class="small text-muted align-self-center me-1 d-none d-md-inline">Plantillas:</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" onclick="aplicarPlantilla('docente', this.closest('form'))">
+                                <i class="bi bi-mortarboard-fill"></i> Docente
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-success fw-semibold" onclick="aplicarPlantilla('caja', this.closest('form'))">
+                                <i class="bi bi-cash-stack"></i> Caja / APAFA
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-info fw-semibold" onclick="aplicarPlantilla('secretaria', this.closest('form'))">
+                                <i class="bi bi-file-earmark-person"></i> Secretaría
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-dark fw-semibold" onclick="aplicarPlantilla('coordinacion', this.closest('form'))">
+                                <i class="bi bi-building-gear"></i> Coordinación
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="aplicarPlantilla('ninguno', this.closest('form'))" title="Desmarcar todo">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <?php foreach ($modulosDef as $modKey => $modInfo): ?>
+                            <?php if (empty($permisosAgrupados[$modKey])) continue; ?>
+                            <div class="col-lg-6">
+                                <div class="modulo-card h-100 p-3 shadow-sm border">
+                                    <div class="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge bg-<?= $modInfo['badge'] ?> bg-opacity-10 text-<?= $modInfo['badge'] ?> p-2 rounded-circle fs-6">
+                                                <i class="bi <?= $modInfo['icono'] ?>"></i>
+                                            </span>
+                                            <div>
+                                                <h6 class="fw-bold mb-0 text-dark"><?= htmlspecialchars($modInfo['titulo']) ?></h6>
+                                                <small class="text-muted" style="font-size: 0.8rem;"><?= htmlspecialchars($modInfo['desc']) ?></small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-column gap-2 mt-2">
+                                        <?php foreach ($permisosAgrupados[$modKey] as $permiso): ?>
+                                            <label class="permiso-item d-flex align-items-start gap-2 mb-0">
+                                                <input class="form-check-input mt-1" type="checkbox" name="permisos[]" 
+                                                       value="<?= (int) $permiso['id'] ?>" 
+                                                       data-codigo="<?= htmlspecialchars($permiso['codigo']) ?>">
+                                                <div class="flex-grow-1">
+                                                    <div class="d-flex align-items-center gap-1">
+                                                        <i class="bi <?= htmlspecialchars($permiso['icono']) ?> text-secondary small"></i>
+                                                        <span class="permiso-titulo fw-bold text-dark small"><?= htmlspecialchars($permiso['nombre']) ?></span>
+                                                    </div>
+                                                    <small class="text-muted d-block" style="font-size: 0.78rem; line-height: 1.25;"><?= htmlspecialchars($permiso['descripcion']) ?></small>
+                                                </div>
+                                            </label>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            </div>
                         <?php endforeach; ?>
-                        <?php if (!$permisos): ?>
-                            <span class="text-muted">No hay permisos activos configurados.</span>
-                        <?php endif; ?>
                     </div>
                 </fieldset>
                 <div class="col-12 pt-3 border-top mt-4">
@@ -364,12 +463,17 @@ try {
                                     $pList = array_values($mapa[$asistente['id']] ?? []);
                                     if ($pList): ?>
                                         <div class="d-flex flex-wrap gap-1">
-                                            <?php foreach ($pList as $pName): ?>
-                                                <span class="badge bg-light text-secondary border fs-6 fw-normal"><?= htmlspecialchars($pName) ?></span>
+                                            <?php foreach ($pList as $pInfo): 
+                                                $mod = $pInfo['modulo'] ?? 'general';
+                                                $badgeStyle = "badge-modulo-{$mod}";
+                                            ?>
+                                                <span class="badge <?= $badgeStyle ?> fw-semibold" style="font-size: 0.78rem;">
+                                                    <?= htmlspecialchars($pInfo['nombre']) ?>
+                                                </span>
                                             <?php endforeach; ?>
                                         </div>
                                     <?php else: ?>
-                                        <span class="text-muted small">Sin permisos</span>
+                                        <span class="text-muted small fst-italic">Sin permisos activos</span>
                                     <?php endif; ?>
                                 </td>
                                 <td>
@@ -379,23 +483,48 @@ try {
                                 </td>
                                 <td class="pe-4">
                                     <div class="d-inline-flex flex-wrap gap-2 align-items-center">
-                                        <details>
-                                            <summary class="btn btn-outline-primary btn-sm px-3 fw-semibold" style="border-radius: 8px; font-size: 0.9rem;">
-                                                <i class="bi bi-pencil-square"></i> Permisos
+                                        <details class="position-relative">
+                                            <summary class="btn btn-outline-primary btn-sm px-3 fw-semibold" style="border-radius: 8px; font-size: 0.88rem;">
+                                                <i class="bi bi-pencil-square"></i> Permisos (<?= count($pList) ?>)
                                             </summary>
-                                            <form method="POST" class="border rounded-3 p-3 mt-2 bg-light shadow-sm">
+                                            <form method="POST" class="border rounded-3 p-3 mt-2 bg-light shadow-sm text-start" style="min-width: 320px; max-width: 520px;">
                                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($tokenCsrf) ?>">
                                                 <input type="hidden" name="action" value="update">
                                                 <input type="hidden" name="usuario_id" value="<?= (int) $asistente['id'] ?>">
-                                                <div class="d-flex flex-column gap-2 mb-3">
-                                                    <?php foreach ($permisos as $permiso): ?>
-                                                        <label class="form-check d-flex align-items-center gap-2 mb-0">
-                                                            <input class="form-check-input mt-0" type="checkbox" name="permisos[]" value="<?= (int) $permiso['id'] ?>" <?= isset($mapa[$asistente['id']][(int) $permiso['id']]) ? 'checked' : '' ?>>
-                                                            <span class="form-check-label fw-semibold text-dark"><?= htmlspecialchars($permiso['nombre']) ?></span>
-                                                        </label>
+                                                
+                                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-1 mb-2 pb-2 border-bottom">
+                                                    <span class="fw-bold small text-dark"><i class="bi bi-sliders text-primary"></i> Asignar Rol Rápido:</span>
+                                                    <div class="btn-group btn-group-sm">
+                                                        <button type="button" class="btn btn-outline-primary py-0 px-2" style="font-size: 0.75rem;" onclick="aplicarPlantilla('docente', this.closest('form'))">Docente</button>
+                                                        <button type="button" class="btn btn-outline-success py-0 px-2" style="font-size: 0.75rem;" onclick="aplicarPlantilla('caja', this.closest('form'))">Caja</button>
+                                                        <button type="button" class="btn btn-outline-info py-0 px-2" style="font-size: 0.75rem;" onclick="aplicarPlantilla('secretaria', this.closest('form'))">Secretaría</button>
+                                                        <button type="button" class="btn btn-outline-dark py-0 px-2" style="font-size: 0.75rem;" onclick="aplicarPlantilla('coordinacion', this.closest('form'))">Coord.</button>
+                                                        <button type="button" class="btn btn-outline-secondary py-0 px-2" style="font-size: 0.75rem;" onclick="aplicarPlantilla('ninguno', this.closest('form'))">0</button>
+                                                    </div>
+                                                </div>
+
+                                                <div class="d-flex flex-column gap-2 mb-3" style="max-height: 280px; overflow-y: auto;">
+                                                    <?php foreach ($modulosDef as $modKey => $modInfo): ?>
+                                                        <?php if (empty($permisosAgrupados[$modKey])) continue; ?>
+                                                        <div class="p-2 border rounded bg-white">
+                                                            <div class="fw-bold text-dark small mb-1 pb-1 border-bottom d-flex align-items-center gap-1">
+                                                                <i class="bi <?= $modInfo['icono'] ?> text-<?= $modInfo['badge'] ?>"></i>
+                                                                <?= htmlspecialchars($modInfo['titulo']) ?>
+                                                            </div>
+                                                            <?php foreach ($permisosAgrupados[$modKey] as $permiso): ?>
+                                                                <?php $isChecked = isset($mapa[$asistente['id']][(int) $permiso['id']]); ?>
+                                                                <label class="form-check d-flex align-items-center gap-2 mb-1" style="font-size: 0.82rem;">
+                                                                    <input class="form-check-input mt-0" type="checkbox" name="permisos[]" 
+                                                                           value="<?= (int) $permiso['id'] ?>" 
+                                                                           data-codigo="<?= htmlspecialchars($permiso['codigo']) ?>"
+                                                                           <?= $isChecked ? 'checked' : '' ?>>
+                                                                    <span class="form-check-label text-dark"><?= htmlspecialchars($permiso['nombre']) ?></span>
+                                                                </label>
+                                                            <?php endforeach; ?>
+                                                        </div>
                                                     <?php endforeach; ?>
                                                 </div>
-                                                <button class="btn btn-primary btn-sm px-3 py-1 fw-semibold" style="border-radius: 7px; font-size: 0.88rem;" type="submit">
+                                                <button class="btn btn-primary btn-sm px-3 py-1 fw-semibold w-100" style="border-radius: 7px; font-size: 0.88rem;" type="submit">
                                                     <i class="bi bi-check2"></i> Guardar Cambios
                                                 </button>
                                             </form>

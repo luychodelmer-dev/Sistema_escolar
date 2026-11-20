@@ -116,9 +116,28 @@ El 100% del código JavaScript ejecutable ha sido extraído de las vistas y comp
 
 ---
 
-## Permisos y Auditoría
+## Permisos Granulares y Auditoría
 
-El usuario con rol `director` es quien otorga o revoca permisos desde `public/director/permisos.php`. Los permisos actuales son `p_editar`, `p_matricular` y `p_cobrar`. La eliminación de pagos realizados es una facultad exclusiva del usuario principal (Director/Administrador); los demás usuarios (asistentes) únicamente conservan las funciones asignadas por el director (como `p_cobrar`) y no pueden eliminar pagos.
+El usuario con rol `director` es quien otorga o revoca permisos granulares desde `public/director/permisos.php`. El sistema cuenta con un catálogo estructurado por áreas con retrocompatibilidad automática:
+
+1. **Estudiantes y Familias:**
+   * `p_estudiantes`: Crear, editar alumnos y consultar expediente 360°.
+   * `p_padres`: Registrar familias, vincular apoderado único y controlar tarjeta APAFA (incluye compatibilidad con `p_editar`).
+2. **Matrículas y Plan Académico:**
+   * `p_matricular`: Registrar matrículas escolares, asignar grado/sección y emitir FUM/Nóminas.
+   * `p_cursos_periodos`: Configurar asignaturas escolares, periodos académicos y secciones.
+3. **Evaluaciones y Calificaciones:**
+   * `p_calificar`: Ingresar y actualizar notas literales oficiales (AD, A, B, C) por periodo lectivo.
+   * `p_cierre_academico`: Promociones de grado y clausura oficial del año escolar.
+4. **Caja y Finanzas:**
+   * `p_cobrar`: Registrar cobros de matrícula, cuotas de APAFA y emitir recibos oficiales.
+   * `p_reportes_caja`: Consultar balance consolidado de caja, liquidación diaria y arqueo.
+5. **Seguridad y Control:**
+   * `p_auditoria`: Supervisar bitácora de eventos y movimientos de seguridad.
+
+La pantalla de permisos incluye **plantillas rápidas (presets de 1 clic)** para roles institucionales (*Docente, Caja / APAFA, Secretaría, Coordinación*).
+
+La eliminación de pagos realizados es una facultad exclusiva del usuario principal (Director/Administrador); ningún asistente puede eliminar cobros.
 
 La tabla `auditoria_movimiento` en PostgreSQL registra inicios de sesión, cambios de permisos, ediciones de apoderados, matrículas, pagos y eliminaciones de pagos (`eliminar_pago`). El director puede consultar los movimientos desde `/director/auditoria`.
 

@@ -6,7 +6,7 @@ if (!isset($_SESSION['user_id'])) {
     header('Location: ../login.php');
     exit;
 }
-require_permission('p_editar');
+require_permission('p_padres');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: padres.php');

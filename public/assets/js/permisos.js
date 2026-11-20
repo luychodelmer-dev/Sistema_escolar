@@ -48,3 +48,37 @@ function copiarCodigo(codigo, btn) {
     }
 }
 window.copiarCodigo = copiarCodigo;
+
+/**
+ * Plantillas predefinidas de permisos por rol institucional
+ */
+const PLANTILLAS_PERMISOS = {
+    docente: ['p_calificar'],
+    caja: ['p_cobrar', 'p_reportes_caja', 'p_padres', 'p_editar'],
+    secretaria: ['p_estudiantes', 'p_padres', 'p_editar', 'p_matricular', 'p_cobrar'],
+    coordinacion: ['p_estudiantes', 'p_matricular', 'p_cursos_periodos', 'p_calificar', 'p_cierre_academico'],
+    todos: ['p_estudiantes', 'p_padres', 'p_editar', 'p_matricular', 'p_cursos_periodos', 'p_calificar', 'p_cierre_academico', 'p_cobrar', 'p_reportes_caja', 'p_auditoria'],
+    ninguno: []
+};
+
+function aplicarPlantilla(tipo, form) {
+    if (!form) return;
+    const targets = PLANTILLAS_PERMISOS[tipo] || [];
+    const checkboxes = form.querySelectorAll('input[type="checkbox"][data-codigo]');
+    checkboxes.forEach(cb => {
+        const codigo = cb.getAttribute('data-codigo');
+        cb.checked = targets.includes(codigo);
+    });
+}
+window.aplicarPlantilla = aplicarPlantilla;
+
+function alternarModulo(checkboxModulo, modulo) {
+    const contenedor = checkboxModulo.closest('.modulo-card');
+    if (!contenedor) return;
+    const checkboxes = contenedor.querySelectorAll('input[type="checkbox"][data-codigo]');
+    checkboxes.forEach(cb => {
+        cb.checked = checkboxModulo.checked;
+    });
+}
+window.alternarModulo = alternarModulo;
+

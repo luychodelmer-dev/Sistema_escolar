@@ -5,8 +5,8 @@ require_once __DIR__ . '/../../app/header.php';
 
 require_auth(['asistente', 'director', 'hiperadmin', 'administrador']);
 $csrfToken = $_SESSION['csrf_token'] ??= bin2hex(random_bytes(32));
-$puedeCambiarEstado = has_permission('p_matricular');
-$puedeGestionarEstudiantes = has_permission('p_matricular');
+$puedeCambiarEstado = has_permission('p_estudiantes');
+$puedeGestionarEstudiantes = has_permission('p_estudiantes');
 
 try {
     $pdo->exec("
@@ -27,7 +27,7 @@ try {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'actualizar_estado') {
-    require_permission('p_matricular');
+    require_permission('p_estudiantes');
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     $submittedToken = $_POST['csrf_token'] ?? '';
