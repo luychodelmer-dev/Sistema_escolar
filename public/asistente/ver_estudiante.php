@@ -4,10 +4,71 @@ require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/header.php';
 
 require_auth(['asistente', 'director']);
+$csrfToken = $_SESSION['csrf_token'] ??= bin2hex(random_bytes(32));
 $id = filter_var($_GET['id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 if ($id === false) {
     http_response_code(400);
     exit('ID de estudiante inválido.');
+}
+
+$error = '';
+$mensaje = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'eliminar_matricula') {
+    require_permission('p_matricular');
+    $submittedToken = $_POST['csrf_token'] ?? '';
+    if (!is_string($submittedToken) || !hash_equals($csrfToken, $submittedToken)) {
+        $error = 'Solicitud inválida o sesión expirada. Recarga la página e inténtalo nuevamente.';
+    } else {
+        $matriculaId = filter_var($_POST['matricula_id'] ?? '', FILTER_VALIDATE_INT);
+        if (!$matriculaId) {
+            $error = 'Identificador de matrícula no válido.';
+        } else {
+            // Verificar que pertenezca al estudiante actual
+            $stmtM = $pdo->prepare("
+                SELECT m.id, m.estudiante_id, a.anio, e.nombres, e.apellido_paterno, e.apellido_materno
+                FROM matricula m
+                JOIN anio a ON a.id = m.anio_id
+                JOIN estudiante e ON e.id = m.estudiante_id
+                WHERE m.id = :id AND m.estudiante_id = :estudiante_id
+            ");
+            $stmtM->execute(['id' => $matriculaId, 'estudiante_id' => $id]);
+            $matriculaData = $stmtM->fetch();
+
+            if (!$matriculaData) {
+                $error = 'La matrícula seleccionada no existe para este estudiante.';
+            } else {
+                // Comprobar si existen pagos asociados
+                $stmtPagos = $pdo->prepare("SELECT COUNT(*) FROM pago WHERE matricula_id = :id");
+                $stmtPagos->execute(['id' => $matriculaId]);
+                $pagosCount = (int)$stmtPagos->fetchColumn();
+
+                if ($pagosCount > 0) {
+                    $error = "No se puede eliminar la matrícula del año {$matriculaData['anio']} porque tiene {$pagosCount} pago(s) registrado(s). Primero elimine los pagos correspondientes en el módulo de Caja.";
+                } else {
+                    $pdo->beginTransaction();
+                    try {
+                        // Limpiar registros relacionados
+                        $pdo->prepare("DELETE FROM cuenta_pago WHERE matricula_id = :id")->execute(['id' => $matriculaId]);
+                        $pdo->prepare("DELETE FROM calificacion WHERE matricula_id = :id")->execute(['id' => $matriculaId]);
+                        $pdo->prepare("DELETE FROM recuperacion_academica WHERE matricula_id = :id")->execute(['id' => $matriculaId]);
+                        
+                        // Eliminar matrícula
+                        $pdo->prepare("DELETE FROM matricula WHERE id = :id")->execute(['id' => $matriculaId]);
+
+                        $alumnoNom = "{$matriculaData['apellido_paterno']} {$matriculaData['apellido_materno']}, {$matriculaData['nombres']}";
+                        registrar_auditoria('eliminar_matricula', "Eliminó matrícula del año {$matriculaData['anio']} para el estudiante: {$alumnoNom} (ID: {$matriculaData['estudiante_id']}).");
+
+                        $pdo->commit();
+                        $mensaje = "Matrícula del año {$matriculaData['anio']} eliminada correctamente.";
+                    } catch (\Throwable $e) {
+                        $pdo->rollBack();
+                        $error = 'Error al eliminar la matrícula: ' . $e->getMessage();
+                    }
+                }
+            }
+        }
+    }
 }
 
 $stmt = $pdo->prepare('SELECT * FROM estudiante WHERE id = :id');
@@ -172,6 +233,22 @@ $h = static fn ($value): string => htmlspecialchars((string) ($value ?? '-'), EN
         </div>
     </div>
 
+    <?php if (!empty($mensaje)): ?>
+        <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert">
+            <i class="bi bi-check-circle-fill fs-5"></i>
+            <div><?= htmlspecialchars($mensaje) ?></div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+        </div>
+    <?php endif; ?>
+
+    <?php if (!empty($error)): ?>
+        <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert">
+            <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+            <div><?= htmlspecialchars($error) ?></div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+        </div>
+    <?php endif; ?>
+
     <section class="card info-card mb-4">
         <div class="card-body p-4">
             <h2 class="section-header"><i class="bi bi-person-vcard text-primary"></i> Información Personal</h2>
@@ -299,7 +376,7 @@ $h = static fn ($value): string => htmlspecialchars((string) ($value ?? '-'), EN
                             <th style="min-width: 110px;">Grado</th>
                             <th style="min-width: 100px;">Sección</th>
                             <th style="min-width: 120px;">Estado</th>
-                            <th style="min-width: 110px;" class="text-end">Ficha</th>
+                            <th style="min-width: 170px;" class="text-end">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -315,9 +392,19 @@ $h = static fn ($value): string => htmlspecialchars((string) ($value ?? '-'), EN
                                     </span>
                                 </td>
                                 <td class="text-end">
-                                    <a href="ficha_matricula.php?id=<?= (int)$matricula['id'] ?>" target="_blank" rel="opener" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" style="border-radius: 7px; font-size: 0.82rem;">
-                                        <i class="bi bi-printer"></i> Imprimir
-                                    </a>
+                                    <div class="d-inline-flex align-items-center gap-1 justify-content-end">
+                                        <a href="ficha_matricula.php?id=<?= (int)$matricula['id'] ?>" target="_blank" rel="opener" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" style="border-radius: 7px; font-size: 0.82rem;">
+                                            <i class="bi bi-printer"></i> Imprimir
+                                        </a>
+                                        <form method="POST" class="d-inline m-0" onsubmit="return confirm('¿Estás seguro de que deseas eliminar la matrícula del año <?= $h($matricula['anio']) ?>? Esta acción no se puede deshacer.');">
+                                            <input type="hidden" name="action" value="eliminar_matricula">
+                                            <input type="hidden" name="matricula_id" value="<?= (int)$matricula['id'] ?>">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES) ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1" title="Eliminar matrícula del año <?= $h($matricula['anio']) ?>" style="border-radius: 7px; font-size: 0.82rem;">
+                                                <i class="bi bi-trash"></i> Eliminar
+                                            </button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

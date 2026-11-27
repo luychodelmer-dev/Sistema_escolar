@@ -198,6 +198,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $submittedToken = $_POST['csrf_token'] ?? '';
     if (!is_string($submittedToken) || !hash_equals($csrfToken, $submittedToken)) {
         $error = 'Solicitud inválida o sesión expirada. Recarga la página e inténtalo nuevamente.';
+    } elseif (($_POST['action'] ?? '') === 'eliminar_matricula') {
+        $matriculaId = filter_var($_POST['matricula_id'] ?? '', FILTER_VALIDATE_INT);
+        if (!$matriculaId) {
+            $error = 'Identificador de matrícula no válido.';
+        } else {
+            $stmtM = $pdo->prepare("
+                SELECT m.id, m.estudiante_id, a.anio, e.nombres, e.apellido_paterno, e.apellido_materno
+                FROM matricula m
+                JOIN anio a ON a.id = m.anio_id
+                JOIN estudiante e ON e.id = m.estudiante_id
+                WHERE m.id = :id
+            ");
+            $stmtM->execute(['id' => $matriculaId]);
+            $matriculaData = $stmtM->fetch();
+
+            if (!$matriculaData) {
+                $error = 'La matrícula seleccionada no existe.';
+            } else {
+                $stmtPagos = $pdo->prepare("SELECT COUNT(*) FROM pago WHERE matricula_id = :id");
+                $stmtPagos->execute(['id' => $matriculaId]);
+                $pagosCount = (int)$stmtPagos->fetchColumn();
+
+                if ($pagosCount > 0) {
+                    $error = "No se puede eliminar la matrícula del año {$matriculaData['anio']} porque tiene {$pagosCount} pago(s) registrado(s). Primero elimine los pagos correspondientes en el módulo de Caja.";
+                } else {
+                    $pdo->beginTransaction();
+                    try {
+                        $pdo->prepare("DELETE FROM cuenta_pago WHERE matricula_id = :id")->execute(['id' => $matriculaId]);
+                        $pdo->prepare("DELETE FROM calificacion WHERE matricula_id = :id")->execute(['id' => $matriculaId]);
+                        $pdo->prepare("DELETE FROM recuperacion_academica WHERE matricula_id = :id")->execute(['id' => $matriculaId]);
+                        $pdo->prepare("DELETE FROM matricula WHERE id = :id")->execute(['id' => $matriculaId]);
+
+                        $alumnoNom = "{$matriculaData['apellido_paterno']} {$matriculaData['apellido_materno']}, {$matriculaData['nombres']}";
+                        registrar_auditoria('eliminar_matricula', "Eliminó matrícula del año {$matriculaData['anio']} para el estudiante: {$alumnoNom} (ID: {$matriculaData['estudiante_id']}).");
+
+                        $pdo->commit();
+                        header('Location: matriculas.php?eliminado=1');
+                        exit;
+                    } catch (\Throwable $e) {
+                        $pdo->rollBack();
+                        $error = 'Error al eliminar la matrícula: ' . $e->getMessage();
+                    }
+                }
+            }
+        }
     } else {
         $estudianteIdRaw = trim($_POST['estudiante_id'] ?? '');
     $estudianteId = $estudianteIdRaw === '' ? null : filter_var($estudianteIdRaw, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
@@ -425,6 +470,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 if (isset($_GET['guardado'])) {
     $mensaje = 'Matrícula registrada correctamente.';
+} elseif (isset($_GET['eliminado'])) {
+    $mensaje = 'Matrícula eliminada correctamente.';
 }
 
 $sql = 'SELECT m.*, a.anio AS anio, al.nombres, al.apellido_paterno, al.apellido_materno, al.dni, n.nombre AS nivel, g.numero AS grado, s.nombre AS seccion
@@ -476,7 +523,7 @@ $sql .= ' ORDER BY a.anio DESC, m.id DESC';
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $matriculas = $stmt->fetchAll();
-$renderMatriculaRows = static function (array $rows): void {
+$renderMatriculaRows = static function (array $rows) use ($csrfToken): void {
     if (!$rows) {
         echo '<tr><td colspan="8" class="text-center py-5">
             <div class="py-4">
@@ -533,6 +580,14 @@ $renderMatriculaRows = static function (array $rows): void {
                     <a href="ver_estudiante.php?id=' . (int)$matricula['estudiante_id'] . '" class="btn btn-sm btn-light border text-secondary" title="Ver perfil del estudiante" style="border-radius: 7px; padding: 0.25rem 0.45rem; font-size: 0.82rem;">
                         <i class="bi bi-eye"></i>
                     </a>
+                    <form method="POST" class="d-inline m-0" onsubmit="return confirm(\'¿Estás seguro de que deseas eliminar la matrícula del año ' . htmlspecialchars((string) $matricula['anio'], ENT_QUOTES) . ' de este estudiante?\');">
+                        <input type="hidden" name="action" value="eliminar_matricula">
+                        <input type="hidden" name="matricula_id" value="' . (int)$matricula['id'] . '">
+                        <input type="hidden" name="csrf_token" value="' . htmlspecialchars($csrfToken, ENT_QUOTES) . '">
+                        <button type="submit" class="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1" title="Eliminar matrícula de este año" style="border-radius: 7px; padding: 0.25rem 0.45rem; font-size: 0.82rem;">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
                 </div>
               </td></tr>';
     }
