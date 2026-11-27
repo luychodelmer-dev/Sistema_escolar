@@ -5,12 +5,71 @@ require_once __DIR__ . '/../../app/header.php';
 
 require_director();
 
-$permisos = $pdo->query('
-    SELECT id, codigo, nombre, descripcion, COALESCE(modulo, \'general\') AS modulo, COALESCE(icono, \'bi-shield-check\') AS icono, COALESCE(orden, 10) AS orden 
-    FROM permisos 
-    WHERE activo = TRUE 
-    ORDER BY orden ASC, nombre ASC
-')->fetchAll();
+// Asegurar existencia de columnas modulo, icono y orden en la tabla permisos
+try {
+    $hasModulo = $pdo->query("
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'permisos' AND column_name = 'modulo'
+    ")->fetchColumn();
+
+    if (!$hasModulo) {
+        $pdo->exec("ALTER TABLE permisos ADD COLUMN IF NOT EXISTS modulo VARCHAR(50) DEFAULT 'general'");
+        $pdo->exec("ALTER TABLE permisos ADD COLUMN IF NOT EXISTS icono VARCHAR(50) DEFAULT 'bi-shield-check'");
+        $pdo->exec("ALTER TABLE permisos ADD COLUMN IF NOT EXISTS orden INT DEFAULT 10");
+
+        $pdo->exec("
+            UPDATE permisos SET modulo = 'estudiantes', icono = 'bi-person-badge', orden = 1 WHERE codigo = 'p_estudiantes';
+            UPDATE permisos SET modulo = 'estudiantes', icono = 'bi-people', orden = 2 WHERE codigo = 'p_padres';
+            UPDATE permisos SET modulo = 'estudiantes', icono = 'bi-person-gear', orden = 3 WHERE codigo = 'p_editar';
+            UPDATE permisos SET modulo = 'matriculas', icono = 'bi-journal-check', orden = 4 WHERE codigo = 'p_matricular';
+            UPDATE permisos SET modulo = 'matriculas', icono = 'bi-calendar3-range', orden = 5 WHERE codigo = 'p_cursos_periodos';
+            UPDATE permisos SET modulo = 'calificaciones', icono = 'bi-card-checklist', orden = 6 WHERE codigo = 'p_calificar';
+            UPDATE permisos SET modulo = 'calificaciones', icono = 'bi-award', orden = 7 WHERE codigo = 'p_cierre_academico';
+            UPDATE permisos SET modulo = 'pagos', icono = 'bi-cash-coin', orden = 8 WHERE codigo = 'p_cobrar';
+            UPDATE permisos SET modulo = 'pagos', icono = 'bi-file-earmark-spreadsheet', orden = 9 WHERE codigo = 'p_reportes_caja';
+            UPDATE permisos SET modulo = 'auditoria', icono = 'bi-shield-shaded', orden = 10 WHERE codigo = 'p_auditoria';
+        ");
+    }
+} catch (Throwable $e) {
+    error_log('Verificación de columnas permisos: ' . $e->getMessage());
+}
+
+$moduloPorCodigo = [
+    'p_estudiantes' => ['modulo' => 'estudiantes', 'icono' => 'bi-person-badge', 'orden' => 1],
+    'p_padres' => ['modulo' => 'estudiantes', 'icono' => 'bi-people', 'orden' => 2],
+    'p_editar' => ['modulo' => 'estudiantes', 'icono' => 'bi-person-gear', 'orden' => 3],
+    'p_matricular' => ['modulo' => 'matriculas', 'icono' => 'bi-journal-check', 'orden' => 4],
+    'p_cursos_periodos' => ['modulo' => 'matriculas', 'icono' => 'bi-calendar3-range', 'orden' => 5],
+    'p_calificar' => ['modulo' => 'calificaciones', 'icono' => 'bi-card-checklist', 'orden' => 6],
+    'p_cierre_academico' => ['modulo' => 'calificaciones', 'icono' => 'bi-award', 'orden' => 7],
+    'p_cobrar' => ['modulo' => 'pagos', 'icono' => 'bi-cash-coin', 'orden' => 8],
+    'p_reportes_caja' => ['modulo' => 'pagos', 'icono' => 'bi-file-earmark-spreadsheet', 'orden' => 9],
+    'p_auditoria' => ['modulo' => 'auditoria', 'icono' => 'bi-shield-shaded', 'orden' => 10],
+];
+
+try {
+    $permisos = $pdo->query('
+        SELECT id, codigo, nombre, descripcion, COALESCE(modulo, \'general\') AS modulo, COALESCE(icono, \'bi-shield-check\') AS icono, COALESCE(orden, 10) AS orden 
+        FROM permisos 
+        WHERE activo = TRUE 
+        ORDER BY orden ASC, nombre ASC
+    ')->fetchAll();
+} catch (Throwable $e) {
+    $permisos = $pdo->query('
+        SELECT id, codigo, nombre, descripcion 
+        FROM permisos 
+        WHERE activo = TRUE 
+        ORDER BY nombre ASC
+    ')->fetchAll();
+    foreach ($permisos as &$p) {
+        $meta = $moduloPorCodigo[$p['codigo']] ?? ['modulo' => 'general', 'icono' => 'bi-shield-check', 'orden' => 10];
+        $p['modulo'] = $meta['modulo'];
+        $p['icono'] = $meta['icono'];
+        $p['orden'] = $meta['orden'];
+    }
+    unset($p);
+    usort($permisos, static fn ($a, $b) => ($a['orden'] <=> $b['orden']) ?: strcasecmp($a['nombre'], $b['nombre']));
+}
 
 $modulosDef = [
     'estudiantes' => [
@@ -169,8 +228,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'reject_request') {
             $reqId = filter_var($_POST['solicitud_id'] ?? 0, FILTER_VALIDATE_INT);
             if ($reqId) {
-                $cancelReq = $pdo->prepare("UPDATE solicitud_reseteo_password SET estado = 'rechazada' WHERE id = :id");
+                $cancelReq = $pdo->prepare("UPDATE solicitud_reseteo_password SET estado = 'rechazada' WHERE id = :id AND estado = 'pendiente'");
                 $cancelReq->execute(['id' => $reqId]);
+                registrar_auditoria('solicitud_reseteo_rechazada', "El director rechazó la solicitud de reseteo #{$reqId}.");
                 $mensaje = 'Solicitud de recuperación rechazada.';
             }
         } else {
@@ -185,12 +245,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $asistentes = $pdo->query("SELECT id, nombres, correo, estado FROM usuario WHERE rol = 'asistente' ORDER BY nombres")->fetchAll();
-$asignaciones = $pdo->query(
-    'SELECT asignacion.usuario_id, permiso.id AS permiso_id, permiso.codigo, permiso.nombre, COALESCE(permiso.modulo, \'general\') AS modulo
-     FROM usuario_permisos AS asignacion
-     JOIN permisos AS permiso ON permiso.id = asignacion.permiso_id
-     ORDER BY COALESCE(permiso.orden, 10) ASC, permiso.nombre ASC'
-)->fetchAll();
+try {
+    $asignaciones = $pdo->query(
+        'SELECT asignacion.usuario_id, permiso.id AS permiso_id, permiso.codigo, permiso.nombre, COALESCE(permiso.modulo, \'general\') AS modulo
+         FROM usuario_permisos AS asignacion
+         JOIN permisos AS permiso ON permiso.id = asignacion.permiso_id
+         ORDER BY COALESCE(permiso.orden, 10) ASC, permiso.nombre ASC'
+    )->fetchAll();
+} catch (Throwable $e) {
+    $asignaciones = $pdo->query(
+        'SELECT asignacion.usuario_id, permiso.id AS permiso_id, permiso.codigo, permiso.nombre
+         FROM usuario_permisos AS asignacion
+         JOIN permisos AS permiso ON permiso.id = asignacion.permiso_id
+         ORDER BY permiso.nombre ASC'
+    )->fetchAll();
+    foreach ($asignaciones as &$asig) {
+        $asig['modulo'] = $moduloPorCodigo[$asig['codigo']]['modulo'] ?? 'general';
+    }
+    unset($asig);
+}
 $mapa = [];
 foreach ($asignaciones as $asignacion) {
     $mapa[$asignacion['usuario_id']][(int) $asignacion['permiso_id']] = [
@@ -204,10 +277,14 @@ $solicitudesPendientes = [];
 try {
     $solicitudesPendientes = $pdo->query(
         "SELECT s.id, s.usuario_id, s.codigo, s.ip_solicitud, s.creado_en, s.expira_en,
+                GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (s.expira_en - CURRENT_TIMESTAMP)) / 60))::int AS min_restantes,
                 u.nombres, u.correo
          FROM solicitud_reseteo_password s
          JOIN usuario u ON u.id = s.usuario_id
-         WHERE s.estado = 'pendiente' AND s.expira_en > CURRENT_TIMESTAMP
+         WHERE s.estado = 'pendiente'
+           AND s.expira_en > CURRENT_TIMESTAMP
+           AND COALESCE(s.canal, 'direccion') = 'direccion'
+           AND u.rol = 'asistente'
          ORDER BY s.creado_en DESC"
     )->fetchAll();
 } catch (Throwable $e) {
@@ -305,7 +382,7 @@ try {
                                 </td>
                                 <td>
                                     <?php
-                                    $minRestantes = max(0, (int) round((strtotime($sol['expira_en']) - time()) / 60));
+                                    $minRestantes = (int) ($sol['min_restantes'] ?? 0);
                                     ?>
                                     <span class="badge bg-danger-subtle text-danger border border-danger-subtle font-monospace">
                                         Expira en <?= $minRestantes ?> min
@@ -334,7 +411,7 @@ try {
             </div>
             <div class="p-3 bg-light bg-opacity-50 border-top text-muted small d-flex align-items-center gap-2">
                 <i class="bi bi-info-circle text-primary"></i>
-                <span><strong>¿Cómo funciona en la Intranet?</strong> El asistente solicita el código desde la pantalla de login. Puedes dictarle el código de 6 dígitos mostrado arriba, o hacer clic en <em>Resetear Clave</em> para asignarle una contraseña directamente en 1 clic.</span>
+                <span><strong>¿Cómo funciona la autorización?</strong> El asistente solicita el reseteo desde el login sin ver el código en pantalla. Solo tú puedes ver aquí el código de 6 dígitos (válido por 15 min, máximo 5 intentos) o hacer clic en <em>Resetear Clave</em> directamente.</span>
             </div>
         </div>
     </section>
