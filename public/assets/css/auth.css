@@ -125,7 +125,7 @@ body.recovery-page {
 }
 
 .brand-mark,
-.login-card .text-center {
+.login-card > .text-center:not(.alert) {
     display: none;
 }
 

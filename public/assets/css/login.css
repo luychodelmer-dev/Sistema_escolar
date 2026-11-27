@@ -2,4 +2,13 @@
  * Estilos para login.php
  * /assets/css/login.css
  */
-@import url('auth.css');
+@import url('auth.css?v=2');
+
+.login-alert {
+    text-align: center;
+}
+
+.password-wrap .form-control.is-invalid {
+    padding-right: 112px;
+    background-position: right 82px center;
+}
