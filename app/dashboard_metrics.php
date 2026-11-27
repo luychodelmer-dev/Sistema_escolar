@@ -17,45 +17,74 @@ function get_dashboard_metrics(PDO $pdo): array
     $currentMonthName = $meses[$currentMonthNum] ?? date('F');
     $currentYear = (int) date('Y');
 
-    // 1. Estudiantes Activos
+    // 1. Estudiantes Activos y Distribución por Nivel (en una sola consulta)
     $activeStudents = 0;
+    $distributionLevels = [
+        'Inicial' => ['count' => 0, 'pct' => 0],
+        'Primaria' => ['count' => 0, 'pct' => 0],
+        'Secundaria' => ['count' => 0, 'pct' => 0],
+    ];
     try {
-        $activeStudents = (int) $pdo->query(
-            "SELECT COUNT(DISTINCT estudiante_id)
-             FROM matricula
-             WHERE estado = 'Activa'"
-        )->fetchColumn();
+        $matStats = $pdo->query(
+            "SELECT GROUPING(COALESCE(n.nombre, '')) AS is_total,
+                    COALESCE(n.nombre, '') AS nivel,
+                    COUNT(DISTINCT m.estudiante_id) AS total
+             FROM matricula m
+             LEFT JOIN nivel n ON n.id = m.nivel_id
+             WHERE m.estado = 'Activa'
+             GROUP BY GROUPING SETS ((COALESCE(n.nombre, '')), ())"
+        )->fetchAll();
+        $totalAlumnosNivel = 0;
+        foreach ($matStats as $ms) {
+            $tot = (int) $ms['total'];
+            if ((int) $ms['is_total'] === 1) {
+                $activeStudents = $tot;
+                continue;
+            }
+            $nName = mb_strtolower((string) $ms['nivel'], 'UTF-8');
+            if ($nName === '') {
+                continue;
+            }
+            $totalAlumnosNivel += $tot;
+            if (str_contains($nName, 'inic')) {
+                $distributionLevels['Inicial']['count'] += $tot;
+            } elseif (str_contains($nName, 'prim')) {
+                $distributionLevels['Primaria']['count'] += $tot;
+            } elseif (str_contains($nName, 'secu')) {
+                $distributionLevels['Secundaria']['count'] += $tot;
+            }
+        }
+        $divisor = max(1, $totalAlumnosNivel > 0 ? $totalAlumnosNivel : $activeStudents);
+        $distributionLevels['Inicial']['pct'] = round(($distributionLevels['Inicial']['count'] / $divisor) * 100, 1);
+        $distributionLevels['Primaria']['pct'] = round(($distributionLevels['Primaria']['count'] / $divisor) * 100, 1);
+        $distributionLevels['Secundaria']['pct'] = round(($distributionLevels['Secundaria']['count'] / $divisor) * 100, 1);
     } catch (Exception $e) {
         $activeStudents = 0;
     }
 
-    // 2. Ingresos del Mes Actual
+    // 2. Ingresos del Mes Actual e Histórico Total (en una sola consulta)
     $monthlyIncome = 0.0;
+    $totalIncome = 0.0;
     try {
-        $monthlyIncome = (float) $pdo->query(
-            "SELECT COALESCE(SUM(monto), 0)
+        $incomeRow = $pdo->query(
+            "SELECT COALESCE(SUM(monto) FILTER (
+                        WHERE fecha_pago >= date_trunc('month', CURRENT_DATE)::date
+                          AND fecha_pago < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date
+                    ), 0) AS monthly_income,
+                    COALESCE(SUM(monto), 0) AS total_income
              FROM pago
-             WHERE fecha_pago >= date_trunc('month', CURRENT_DATE)::date
-               AND fecha_pago < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date
-               AND LOWER(COALESCE(NULLIF(estado, ''), estado_pago, 'pagado')) NOT IN ('pendiente', 'anulado')"
-        )->fetchColumn();
+             WHERE LOWER(COALESCE(NULLIF(estado, ''), estado_pago, 'pagado')) NOT IN ('pendiente', 'anulado')"
+        )->fetch();
+        if ($incomeRow) {
+            $monthlyIncome = (float) $incomeRow['monthly_income'];
+            $totalIncome = (float) $incomeRow['total_income'];
+        }
     } catch (Exception $e) {
         $monthlyIncome = 0.0;
+        $totalIncome = 0.0;
     }
 
-    // 3. Cuentas con Deuda
-    $pendingDebts = 0;
-    try {
-        $pendingDebts = (int) $pdo->query(
-            'SELECT COUNT(*)
-             FROM cuenta_pago
-             WHERE saldo_restante > 0'
-        )->fetchColumn();
-    } catch (Exception $e) {
-        $pendingDebts = 0;
-    }
-
-    // Total Familias / Apoderados principales
+    // 3. Total Familias / Apoderados principales
     $totalParents = 0;
     try {
         $totalParents = (int) $pdo->query('SELECT COUNT(*) FROM responsable')->fetchColumn();
@@ -63,29 +92,20 @@ function get_dashboard_metrics(PDO $pdo): array
         $totalParents = 0;
     }
 
-    // Total Recaudado Histórico
-    $totalIncome = 0.0;
-    try {
-        $totalIncome = (float) $pdo->query(
-            "SELECT COALESCE(SUM(monto), 0)
-             FROM pago
-             WHERE LOWER(COALESCE(NULLIF(estado, ''), estado_pago, 'pagado')) NOT IN ('pendiente', 'anulado')"
-        )->fetchColumn();
-    } catch (Exception $e) {
-        $totalIncome = 0.0;
-    }
-
-    // 4. Cobranza (Todas las cuentas abiertas)
+    // 4. Cuentas con Deuda y Cobranza Global (en una sola consulta)
+    $pendingDebts = 0;
     $cobrado = 0.0;
     $porCobrar = 0.0;
     $totalFacturado = 0.0;
     try {
         $cuentaStats = $pdo->query(
-            'SELECT COALESCE(SUM(monto_pagado), 0) AS cobrado,
+            'SELECT COUNT(*) FILTER (WHERE saldo_restante > 0) AS pending_debts,
+                    COALESCE(SUM(monto_pagado), 0) AS cobrado,
                     COALESCE(SUM(saldo_restante), 0) AS por_cobrar,
                     COALESCE(SUM(monto_total), 0) AS total_facturado
              FROM cuenta_pago'
         )->fetch();
+        $pendingDebts = (int) ($cuentaStats['pending_debts'] ?? 0);
         if ($cuentaStats && (float)$cuentaStats['total_facturado'] > 0) {
             $cobrado = (float) $cuentaStats['cobrado'];
             $porCobrar = (float) $cuentaStats['por_cobrar'];
@@ -96,6 +116,7 @@ function get_dashboard_metrics(PDO $pdo): array
             $totalFacturado = $cobrado;
         }
     } catch (Exception $e) {
+        $pendingDebts = 0;
         $cobrado = $monthlyIncome > 0 ? $monthlyIncome : $totalIncome;
         $porCobrar = 0.0;
         $totalFacturado = $cobrado;
@@ -310,41 +331,6 @@ function get_dashboard_metrics(PDO $pdo): array
                 'date_formatted' => date('d/m/Y', $ts),
             ];
         }
-    } catch (Exception $e) {
-        // Fallback
-    }
-
-    // 10. Distribución de alumnos por nivel
-    $distributionLevels = [
-        'Inicial' => ['count' => 0, 'pct' => 0],
-        'Primaria' => ['count' => 0, 'pct' => 0],
-        'Secundaria' => ['count' => 0, 'pct' => 0],
-    ];
-    try {
-        $levelCounts = $pdo->query(
-            "SELECT n.nombre AS nivel, COUNT(DISTINCT m.estudiante_id) AS total
-             FROM matricula m
-             JOIN nivel n ON n.id = m.nivel_id
-             WHERE m.estado = 'Activa'
-             GROUP BY n.nombre"
-        )->fetchAll();
-        $totalAlumnosNivel = 0;
-        foreach ($levelCounts as $lc) {
-            $nName = mb_strtolower($lc['nivel'], 'UTF-8');
-            $tot = (int) $lc['total'];
-            $totalAlumnosNivel += $tot;
-            if (str_contains($nName, 'inic')) {
-                $distributionLevels['Inicial']['count'] += $tot;
-            } elseif (str_contains($nName, 'prim')) {
-                $distributionLevels['Primaria']['count'] += $tot;
-            } elseif (str_contains($nName, 'secu')) {
-                $distributionLevels['Secundaria']['count'] += $tot;
-            }
-        }
-        $divisor = max(1, $totalAlumnosNivel > 0 ? $totalAlumnosNivel : $activeStudents);
-        $distributionLevels['Inicial']['pct'] = round(($distributionLevels['Inicial']['count'] / $divisor) * 100, 1);
-        $distributionLevels['Primaria']['pct'] = round(($distributionLevels['Primaria']['count'] / $divisor) * 100, 1);
-        $distributionLevels['Secundaria']['pct'] = round(($distributionLevels['Secundaria']['count'] / $divisor) * 100, 1);
     } catch (Exception $e) {
         // Fallback
     }

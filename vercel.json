@@ -10,10 +10,16 @@
   "routes": [
     {
       "src": "/assets/(.*)",
+      "headers": {
+        "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
       "dest": "/public/assets/$1"
     },
     {
       "src": "/public/assets/(.*)",
+      "headers": {
+        "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400"
+      },
       "dest": "/public/assets/$1"
     },
     {

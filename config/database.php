@@ -80,6 +80,10 @@ try {
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_TIMEOUT            => 10,
     ];
+    if (strpos($host, '.neon.tech') !== false || strpos($host, '-pooler') !== false) {
+        // Evita round-trip extra de PREPARE y colisiones con PgBouncer en modo transaction pooling
+        $pdoOptions[PDO::ATTR_EMULATE_PREPARES] = true;
+    }
 
     try {
         $pdo = new PDO($dsn, $username, $password, $pdoOptions);

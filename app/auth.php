@@ -33,6 +33,11 @@ function has_permission(string $permission): bool
         return false;
     }
 
+    $userId = (int)($_SESSION['user_id'] ?? 0);
+    if ($userId <= 0) {
+        return false;
+    }
+
     // Mapeo de compatibilidad con permisos heredados
     $fallbackMap = [
         'p_estudiantes'      => ['p_estudiantes', 'p_matricular'],
@@ -44,24 +49,28 @@ function has_permission(string $permission): bool
         'p_editar'           => ['p_editar', 'p_padres'],
     ];
 
+    // Cachear en memoria todos los permisos activos del usuario por petición (1 sola consulta SQL)
+    static $userPermissionsCache = [];
+    if (!isset($userPermissionsCache[$userId])) {
+        $stmt = $pdo->prepare(
+            'SELECT permisos.codigo
+             FROM usuario_permisos AS asignacion
+             JOIN permisos ON permisos.id = asignacion.permiso_id
+             WHERE asignacion.usuario_id = ?
+               AND permisos.activo = TRUE'
+        );
+        $stmt->execute([$userId]);
+        $userPermissionsCache[$userId] = array_flip($stmt->fetchAll(PDO::FETCH_COLUMN));
+    }
+
     $codigosAChequear = $fallbackMap[$permission] ?? [$permission];
-    $inPlaceholders = implode(',', array_fill(0, count($codigosAChequear), '?'));
-    $params = array_merge([$_SESSION['user_id'] ?? 0], $codigosAChequear);
+    foreach ($codigosAChequear as $codigo) {
+        if (isset($userPermissionsCache[$userId][$codigo])) {
+            return true;
+        }
+    }
 
-    $stmt = $pdo->prepare(
-        "SELECT EXISTS (
-            SELECT 1
-            FROM usuario_permisos AS asignacion
-            JOIN permisos ON permisos.id = asignacion.permiso_id
-            WHERE asignacion.usuario_id = ?
-              AND permisos.codigo IN ($inPlaceholders)
-              AND permisos.activo = TRUE
-        )"
-    );
-    $stmt->execute($params);
-
-    $granted = $stmt->fetchColumn();
-    return $granted === true || $granted === 't' || $granted === 1 || $granted === '1';
+    return false;
 }
 
 /**
