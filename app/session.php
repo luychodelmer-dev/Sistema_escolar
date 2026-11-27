@@ -16,7 +16,8 @@ function init_app_session(?PDO $pdo = null): void
     if (session_status() === PHP_SESSION_NONE) {
         $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
             || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
-            || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443);
+            || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443)
+            || (isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'vercel.app') !== false);
 
         session_set_cookie_params([
             'lifetime' => 86400 * 7,
@@ -35,11 +36,18 @@ function init_app_session(?PDO $pdo = null): void
 }
 
 /**
- * Genera la clave secreta para firmar la cookie.
+ * Genera la clave secreta para firmar la cookie de forma determinista y segura.
  */
 function get_session_secret(): string
 {
-    $envSecret = getenv('DATABASE_URL') ?: getenv('SISTEMA_ESCOLAR_DB_PASSWORD') ?: 'default_salt_key_dm_2026';
+    $envSecret = $_ENV['DATABASE_URL'] 
+        ?? $_SERVER['DATABASE_URL'] 
+        ?? getenv('DATABASE_URL') 
+        ?? $_ENV['SISTEMA_ESCOLAR_DB_PASSWORD'] 
+        ?? $_SERVER['SISTEMA_ESCOLAR_DB_PASSWORD'] 
+        ?? getenv('SISTEMA_ESCOLAR_DB_PASSWORD') 
+        ?? 'colegio_divino_maestro_sec_2026_x89a';
+
     return hash('sha256', $envSecret . SESSION_SECRET_SALT);
 }
 
@@ -96,7 +104,8 @@ function save_stateless_session(): void
     $data = $_SESSION ?? [];
     $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
         || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
-        || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443);
+        || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443)
+        || (isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'vercel.app') !== false);
 
     if (empty($data)) {
         if (isset($_COOKIE[SESSION_COOKIE_NAME])) {
@@ -133,7 +142,8 @@ function destroy_stateless_session(): void
     $_SESSION = [];
     $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
         || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
-        || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443);
+        || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443)
+        || (isset($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'vercel.app') !== false);
 
     setcookie(SESSION_COOKIE_NAME, '', [
         'expires'  => time() - 3600,

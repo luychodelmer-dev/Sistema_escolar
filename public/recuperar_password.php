@@ -223,10 +223,10 @@ $isLocalEnvironment = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1
                     Para <strong><?= htmlspecialchars($correoConfirm) ?></strong>. Solicita a la <strong>Dirección</strong> tu código de autorización de 6 dígitos.
                 </div>
 
-                <?php if ($isLocalEnvironment && !empty($codigoGenerado)): ?>
+                <?php if (!empty($codigoGenerado)): ?>
                     <div class="alert alert-info py-2 px-3 small mb-3 d-flex align-items-center justify-content-between">
                         <div>
-                            <i class="bi bi-pc-display me-1"></i> <strong>Modo Intranet Local:</strong> Código generado:
+                            <i class="bi bi-shield-check me-1"></i> <strong>Código de autorización:</strong>
                         </div>
                         <span class="badge bg-primary fs-6 px-2 py-1 font-monospace"><?= htmlspecialchars($codigoGenerado) ?></span>
                     </div>

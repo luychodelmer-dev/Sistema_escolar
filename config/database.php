@@ -58,21 +58,15 @@ if (empty($host)) {
     $sslmode  = $findEnv(['SISTEMA_ESCOLAR_DB_SSLMODE', 'DB_SSLMODE', 'PGSSLMODE'], $localConfig['sslmode'] ?? $defaultSsl);
 }
 
-// 3. Soporte automático para SNI de Neon cuando el host pertenece a neon.tech
+// 3. Soporte de respaldo para SNI de Neon cuando libpq no lo soporta nativamente
 $endpointId = '';
 if (strpos($host, '.neon.tech') !== false) {
     $parts = explode('.', $host);
-    $endpointId = $parts[0] ?? ''; // Preserva -pooler si se conecta a través del connection pooler (PgBouncer)
+    $rawEndpoint = $parts[0] ?? '';
+    // Neon espera el endpoint ID sin el sufijo "-pooler" cuando se pasa vía parámetro de contraseña
+    $endpointId = preg_replace('/-pooler$/', '', $rawEndpoint);
 } elseif (!empty($options) && preg_match('/endpoint=([a-zA-Z0-9\-]+)/', $options, $m)) {
     $endpointId = $m[1];
-}
-
-// Solución oficial de Neon para clientes / libpq sin soporte nativo de SNI:
-// Se antepone "endpoint=<endpoint_id>$" a la contraseña (el delimitador $ es requerido por PgBouncer de Neon).
-if (!empty($endpointId)) {
-    if (strpos($password, 'endpoint=') === false) {
-        $password = "endpoint={$endpointId}$" . $password;
-    }
 }
 
 try {
@@ -81,11 +75,27 @@ try {
         $dsn .= ";sslmode={$sslmode}";
     }
 
-    $pdo = new PDO($dsn, $username, $password, [
+    $pdoOptions = [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_TIMEOUT            => 10,
-    ]);
+    ];
+
+    try {
+        $pdo = new PDO($dsn, $username, $password, $pdoOptions);
+    } catch (PDOException $primaryException) {
+        $msg = $primaryException->getMessage();
+        $needsEndpointFallback = !empty($endpointId)
+            && strpos($password, 'endpoint=') === false
+            && (stripos($msg, 'Endpoint ID is not specified') !== false || stripos($msg, 'SNI') !== false);
+
+        if (!$needsEndpointFallback) {
+            throw $primaryException;
+        }
+
+        $fallbackPassword = "endpoint={$endpointId}$" . $password;
+        $pdo = new PDO($dsn, $username, $fallbackPassword, $pdoOptions);
+    }
 } catch (PDOException $exception) {
     http_response_code(500);
     $maskedHost = htmlspecialchars($host);
