@@ -5,7 +5,10 @@ require_once __DIR__ . '/../../app/header.php';
 
 require_auth(['asistente', 'director', 'hiperadmin', 'administrador']);
 
-$pdo->exec(<<<'SQL'
+try {
+    $tablaExiste = $pdo->query("SELECT to_regclass('public.cuenta_pago')")->fetchColumn();
+    if (!$tablaExiste) {
+        $pdo->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS pago (
     id SERIAL PRIMARY KEY,
     responsable VARCHAR(150) NOT NULL,
@@ -17,7 +20,7 @@ CREATE TABLE IF NOT EXISTS pago (
     creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 SQL);
-$pdo->exec(<<<'SQL'
+        $pdo->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS concepto_pago (
     id BIGSERIAL PRIMARY KEY,
     descripcion VARCHAR(80) NOT NULL UNIQUE,
@@ -29,10 +32,10 @@ CREATE TABLE IF NOT EXISTS concepto_pago (
     creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
 SQL);
-$pdo->exec('ALTER TABLE concepto_pago ADD COLUMN IF NOT EXISTS monto_total NUMERIC(10, 2)');
-$pdo->exec('ALTER TABLE concepto_pago ADD COLUMN IF NOT EXISTS monto_default NUMERIC(10, 2)');
-$pdo->exec("ALTER TABLE concepto_pago ADD COLUMN IF NOT EXISTS tipo_cobro VARCHAR(20) NOT NULL DEFAULT 'estudiante'");
-$pdo->exec(<<<'SQL'
+        $pdo->exec('ALTER TABLE concepto_pago ADD COLUMN IF NOT EXISTS monto_total NUMERIC(10, 2)');
+        $pdo->exec('ALTER TABLE concepto_pago ADD COLUMN IF NOT EXISTS monto_default NUMERIC(10, 2)');
+        $pdo->exec("ALTER TABLE concepto_pago ADD COLUMN IF NOT EXISTS tipo_cobro VARCHAR(20) NOT NULL DEFAULT 'estudiante'");
+        $pdo->exec(<<<'SQL'
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'concepto_pago_tipo_cobro_check') THEN
@@ -42,19 +45,19 @@ BEGIN
     END IF;
 END $$
 SQL);
-$pdo->exec('UPDATE concepto_pago SET monto_default = monto_total WHERE monto_default IS NULL AND monto_total IS NOT NULL');
-$pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS responsable_id BIGINT REFERENCES responsable(id) ON DELETE SET NULL');
-$pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS concepto_id BIGINT REFERENCES concepto_pago(id) ON DELETE SET NULL');
-$pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS matricula_id BIGINT REFERENCES matricula(id) ON DELETE RESTRICT');
-$pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS monto_total NUMERIC(10, 2)');
-$pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS monto_pagado NUMERIC(10, 2) NOT NULL DEFAULT 0');
-$pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS saldo_restante NUMERIC(10, 2) NOT NULL DEFAULT 0');
-$pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS abono_hoy NUMERIC(10, 2) NOT NULL DEFAULT 0');
-$pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS entregado_por VARCHAR(150)');
-$pdo->exec('UPDATE pago SET monto_total = monto, monto_pagado = monto, saldo_restante = 0 WHERE monto_total IS NULL AND monto_pagado = 0');
-$pdo->exec('UPDATE pago SET abono_hoy = monto WHERE abono_hoy = 0 AND monto > 0');
-$pdo->exec('ALTER TABLE matricula ADD COLUMN IF NOT EXISTS apoderado_principal_id BIGINT');
-$pdo->exec(<<<'SQL'
+        $pdo->exec('UPDATE concepto_pago SET monto_default = monto_total WHERE monto_default IS NULL AND monto_total IS NOT NULL');
+        $pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS responsable_id BIGINT REFERENCES responsable(id) ON DELETE SET NULL');
+        $pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS concepto_id BIGINT REFERENCES concepto_pago(id) ON DELETE SET NULL');
+        $pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS matricula_id BIGINT REFERENCES matricula(id) ON DELETE RESTRICT');
+        $pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS monto_total NUMERIC(10, 2)');
+        $pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS monto_pagado NUMERIC(10, 2) NOT NULL DEFAULT 0');
+        $pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS saldo_restante NUMERIC(10, 2) NOT NULL DEFAULT 0');
+        $pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS abono_hoy NUMERIC(10, 2) NOT NULL DEFAULT 0');
+        $pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS entregado_por VARCHAR(150)');
+        $pdo->exec('UPDATE pago SET monto_total = monto, monto_pagado = monto, saldo_restante = 0 WHERE monto_total IS NULL AND monto_pagado = 0');
+        $pdo->exec('UPDATE pago SET abono_hoy = monto WHERE abono_hoy = 0 AND monto > 0');
+        $pdo->exec('ALTER TABLE matricula ADD COLUMN IF NOT EXISTS apoderado_principal_id BIGINT');
+        $pdo->exec(<<<'SQL'
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'matricula_apoderado_principal_id_fkey') THEN
@@ -63,7 +66,7 @@ BEGIN
     END IF;
 END $$
 SQL);
-$pdo->exec(<<<'SQL'
+        $pdo->exec(<<<'SQL'
 UPDATE matricula m
 SET apoderado_principal_id = (
     SELECT ar.responsable_id FROM estudiante_responsable ar
@@ -75,7 +78,7 @@ SET apoderado_principal_id = (
 )
 WHERE m.apoderado_principal_id IS NULL AND m.estudiante_id IS NOT NULL
 SQL);
-$pdo->exec(<<<'SQL'
+        $pdo->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS cuenta_pago (
     id BIGSERIAL PRIMARY KEY,
     matricula_id BIGINT REFERENCES matricula(id) ON DELETE CASCADE,
@@ -87,13 +90,16 @@ CREATE TABLE IF NOT EXISTS cuenta_pago (
     actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
 SQL);
-$pdo->exec('ALTER TABLE cuenta_pago ADD COLUMN IF NOT EXISTS matricula_id BIGINT REFERENCES matricula(id) ON DELETE CASCADE');
-$pdo->exec('ALTER TABLE cuenta_pago ALTER COLUMN responsable_id DROP NOT NULL');
-$pdo->exec('ALTER TABLE cuenta_pago DROP CONSTRAINT IF EXISTS cuenta_pago_responsable_id_concepto_id_key');
-$pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS cuenta_pago_matricula_concepto_unique ON cuenta_pago (matricula_id, concepto_id) WHERE matricula_id IS NOT NULL');
-$pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS cuenta_pago_id BIGINT REFERENCES cuenta_pago(id) ON DELETE SET NULL');
-
-$pdo->exec("UPDATE concepto_pago SET activo = FALSE WHERE LOWER(descripcion) = 'qaliwarma'");
+        $pdo->exec('ALTER TABLE cuenta_pago ADD COLUMN IF NOT EXISTS matricula_id BIGINT REFERENCES matricula(id) ON DELETE CASCADE');
+        $pdo->exec('ALTER TABLE cuenta_pago ALTER COLUMN responsable_id DROP NOT NULL');
+        $pdo->exec('ALTER TABLE cuenta_pago DROP CONSTRAINT IF EXISTS cuenta_pago_responsable_id_concepto_id_key');
+        $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS cuenta_pago_matricula_concepto_unique ON cuenta_pago (matricula_id, concepto_id) WHERE matricula_id IS NOT NULL');
+        $pdo->exec('ALTER TABLE pago ADD COLUMN IF NOT EXISTS cuenta_pago_id BIGINT REFERENCES cuenta_pago(id) ON DELETE SET NULL');
+        $pdo->exec("UPDATE concepto_pago SET activo = FALSE WHERE LOWER(descripcion) = 'qaliwarma'");
+    }
+} catch (Throwable $e) {
+    error_log('Verificación de esquema cuenta_pago: ' . $e->getMessage());
+}
 
 $error = '';
 $mensaje = '';
@@ -620,21 +626,13 @@ if (isset($_GET['guardado'])) {
     $mensaje = 'Pago eliminado correctamente y saldo actualizado.';
 }
 
-$sql = <<<'SQL'
-SELECT p.*, COALESCE(cuenta.monto_total, p.monto_total, p.monto) AS total_cuenta,
-    COALESCE(cuenta.monto_pagado, p.monto_pagado, p.monto) AS acumulado_cuenta,
-    COALESCE(cuenta.saldo_restante, p.saldo_restante, 0) AS saldo_cuenta,
-    CONCAT_WS(' ', a.nombres, a.apellido_paterno, a.apellido_materno) AS estudiante_nombre,
-    COALESCE(CONCAT_WS(' ', r.nombres, r.apellido_paterno, r.apellido_materno), p.responsable) AS apoderado_nombre
-FROM pago p
-LEFT JOIN matricula m ON m.id = p.matricula_id
-LEFT JOIN estudiante a ON a.id = m.estudiante_id
-LEFT JOIN responsable r ON r.id = COALESCE(p.responsable_id, m.apoderado_principal_id)
-LEFT JOIN cuenta_pago cuenta ON cuenta.id = p.cuenta_pago_id
-SQL;
+$paginaActual = max(1, (int) ($_GET['pagina'] ?? 1));
+$porPagina = 50;
+
+$whereSql = '';
 $params = [];
 if ($busqueda !== '') {
-    $sql .= " WHERE (
+    $whereSql = " WHERE (
         CONCAT_WS(' ', a.dni, a.nombres, a.apellido_paterno, a.apellido_materno) ILIKE :busqueda
         OR CONCAT_WS(' ', a.apellido_paterno, a.apellido_materno, a.nombres) ILIKE :busqueda
         OR (r.id IS NOT NULL AND (
@@ -657,11 +655,46 @@ if ($busqueda !== '') {
     )";
     $params = ['busqueda' => "%$busqueda%"];
 }
-$sql .= ' ORDER BY p.fecha_pago DESC, p.id DESC';
+
+$sqlCount = 'SELECT COUNT(p.id) FROM pago p
+LEFT JOIN matricula m ON m.id = p.matricula_id
+LEFT JOIN estudiante a ON a.id = m.estudiante_id
+LEFT JOIN responsable r ON r.id = COALESCE(p.responsable_id, m.apoderado_principal_id)' . $whereSql;
+
+$stmtCount = $pdo->prepare($sqlCount);
+$stmtCount->execute($params);
+$totalPagos = (int) $stmtCount->fetchColumn();
+
+$totalPaginas = max(1, (int) ceil($totalPagos / $porPagina));
+if ($paginaActual > $totalPaginas) {
+    $paginaActual = $totalPaginas;
+}
+$offset = ($paginaActual - 1) * $porPagina;
+
+$sql = <<<'SQL'
+SELECT p.*, COALESCE(cuenta.monto_total, p.monto_total, p.monto) AS total_cuenta,
+    COALESCE(cuenta.monto_pagado, p.monto_pagado, p.monto) AS acumulado_cuenta,
+    COALESCE(cuenta.saldo_restante, p.saldo_restante, 0) AS saldo_cuenta,
+    CONCAT_WS(' ', a.nombres, a.apellido_paterno, a.apellido_materno) AS estudiante_nombre,
+    COALESCE(CONCAT_WS(' ', r.nombres, r.apellido_paterno, r.apellido_materno), p.responsable) AS apoderado_nombre
+FROM pago p
+LEFT JOIN matricula m ON m.id = p.matricula_id
+LEFT JOIN estudiante a ON a.id = m.estudiante_id
+LEFT JOIN responsable r ON r.id = COALESCE(p.responsable_id, m.apoderado_principal_id)
+LEFT JOIN cuenta_pago cuenta ON cuenta.id = p.cuenta_pago_id
+SQL;
+
+$sql .= $whereSql . ' ORDER BY p.fecha_pago DESC, p.id DESC LIMIT :limite OFFSET :offset';
 $stmt = $pdo->prepare($sql);
-$stmt->execute($params);
+if ($busqueda !== '') {
+    $stmt->bindValue(':busqueda', "%$busqueda%", PDO::PARAM_STR);
+}
+$stmt->bindValue(':limite', $porPagina, PDO::PARAM_INT);
+$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+$stmt->execute();
 $pagos = $stmt->fetchAll();
-$renderPagoRows = static function (array $rows) use ($puedeCobrar, $esDirector, $tokenCsrf): void {
+
+$renderPagoRows = static function (array $rows, int $offset = 0) use ($puedeCobrar, $esDirector, $tokenCsrf): void {
     if (!$rows) {
         echo '<tr><td colspan="10" class="text-center py-5">
             <div class="py-4">
@@ -672,7 +705,7 @@ $renderPagoRows = static function (array $rows) use ($puedeCobrar, $esDirector, 
         </td></tr>';
         return;
     }
-    $secuencia = 1;
+    $secuencia = $offset + 1;
     foreach ($rows as $pago) {
         $total = (float) $pago['total_cuenta'];
         $pagado = (float) $pago['acumulado_cuenta'];
@@ -716,7 +749,8 @@ $renderPagoRows = static function (array $rows) use ($puedeCobrar, $esDirector, 
 };
 if (($_GET['ajax'] ?? '') === 'tabla') {
     header('Content-Type: text/html; charset=utf-8');
-    $renderPagoRows($pagos);
+    header('X-Total-Operaciones: ' . $totalPagos);
+    $renderPagoRows($pagos, $offset);
     exit;
 }
 ?>
@@ -793,10 +827,11 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
                 <a href="reporte_pagos.php" class="btn btn-outline-primary d-inline-flex align-items-center gap-1.5 px-3 py-1.5 fw-semibold shadow-sm" style="border-radius: 9px; font-size: 0.88rem;">
                     <i class="bi bi-cash-stack"></i> Reporte de Caja
                 </a>
-                <span class="badge bg-primary px-3 py-2 fs-6" id="pagos-count-badge"><?= count($pagos) ?> pagos</span>
+                <span class="badge bg-primary px-3 py-2 fs-6" id="pagos-count-badge"><?= number_format($totalPagos) ?> <?= $totalPagos === 1 ? 'pago' : 'pagos' ?></span>
             </div>
         </div>
         <form method="GET" class="row g-2 mb-3" data-live-filter data-live-target="#pagos-rows" data-live-count-target="#pagos-count-badge" data-live-count-singular="pago" data-live-count-plural="pagos">
+            <input type="hidden" name="pagina" value="1">
             <div class="col-sm-9">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
@@ -825,8 +860,62 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
                         <th style="min-width: 175px;">Acciones</th>
                     </tr>
                 </thead>
-                <tbody id="pagos-rows"><?php $renderPagoRows($pagos); ?></tbody>
+                <tbody id="pagos-rows"><?php $renderPagoRows($pagos, $offset); ?></tbody>
             </table>
+        </div>
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 p-3 border-top bg-light-subtle rounded-bottom mt-2">
+            <div class="text-muted small">
+                <?php if ($totalPagos > 0): ?>
+                    Mostrando <strong><?= $offset + 1 ?></strong> a <strong><?= min($offset + count($pagos), $totalPagos) ?></strong> de <strong><?= number_format($totalPagos) ?></strong> pagos
+                <?php else: ?>
+                    Mostrando 0 pagos
+                <?php endif; ?>
+            </div>
+            <?php if ($totalPaginas > 1): ?>
+            <nav aria-label="Navegación de páginas">
+                <ul class="pagination pagination-sm mb-0">
+                    <?php
+                    $queryBase = $_GET;
+                    unset($queryBase['pagina'], $queryBase['ajax']);
+                    $buildPageUrl = static function (int $p) use ($queryBase): string {
+                        $params = array_merge($queryBase, ['pagina' => $p]);
+                        return 'pagos.php?' . http_build_query($params);
+                    };
+                    ?>
+                    <li class="page-item <?= $paginaActual <= 1 ? 'disabled' : '' ?>">
+                        <a class="page-link" href="<?= $paginaActual <= 1 ? '#' : htmlspecialchars($buildPageUrl($paginaActual - 1)) ?>" aria-label="Anterior">
+                            <i class="bi bi-chevron-left"></i> Anterior
+                        </a>
+                    </li>
+                    <?php
+                    $startPage = max(1, $paginaActual - 2);
+                    $endPage = min($totalPaginas, $paginaActual + 2);
+                    if ($startPage > 1) {
+                        echo '<li class="page-item"><a class="page-link" href="' . htmlspecialchars($buildPageUrl(1)) . '">1</a></li>';
+                        if ($startPage > 2) {
+                            echo '<li class="page-item disabled"><span class="page-link">…</span></li>';
+                        }
+                    }
+                    for ($i = $startPage; $i <= $endPage; $i++):
+                    ?>
+                        <li class="page-item <?= $i === $paginaActual ? 'active' : '' ?>">
+                            <a class="page-link" href="<?= htmlspecialchars($buildPageUrl($i)) ?>"><?= $i ?></a>
+                        </li>
+                    <?php endfor; ?>
+                    <?php if ($endPage < $totalPaginas): ?>
+                        <?php if ($endPage < $totalPaginas - 1): ?>
+                            <li class="page-item disabled"><span class="page-link">…</span></li>
+                        <?php endif; ?>
+                        <li class="page-item"><a class="page-link" href="<?= htmlspecialchars($buildPageUrl($totalPaginas)) ?>"><?= $totalPaginas ?></a></li>
+                    <?php endif; ?>
+                    <li class="page-item <?= $paginaActual >= $totalPaginas ? 'disabled' : '' ?>">
+                        <a class="page-link" href="<?= $paginaActual >= $totalPaginas ? '#' : htmlspecialchars($buildPageUrl($paginaActual + 1)) ?>" aria-label="Siguiente">
+                            Siguiente <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <?php endif; ?>
         </div>
     </section>
 </main>
