@@ -341,8 +341,28 @@ if ($conditions) {
     $sql .= ' WHERE ' . implode(' AND ', $conditions);
 }
 $sql .= ' ORDER BY LOWER(TRIM(r.apellido_paterno)) ASC, LOWER(TRIM(COALESCE(r.apellido_materno, \'\'))) ASC, LOWER(TRIM(r.nombres)) ASC, LOWER(TRIM(al.apellido_paterno)) ASC, LOWER(TRIM(COALESCE(al.apellido_materno, \'\'))) ASC, LOWER(TRIM(al.nombres)) ASC';
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
+
+$countSql = "SELECT COUNT(*) FROM ($sql) sub_count";
+$countStmt = $pdo->prepare($countSql);
+$countStmt->execute($params);
+$totalApoderadosFiltrados = (int) $countStmt->fetchColumn();
+
+$paginaActual = max(1, (int) ($_GET['pagina'] ?? 1));
+$porPagina = 50;
+$totalPaginas = max(1, (int) ceil($totalApoderadosFiltrados / $porPagina));
+if ($paginaActual > $totalPaginas) {
+    $paginaActual = $totalPaginas;
+}
+$offset = ($paginaActual - 1) * $porPagina;
+
+$sqlPaginado = $sql . ' LIMIT :limite OFFSET :offset';
+$stmt = $pdo->prepare($sqlPaginado);
+foreach ($params as $k => $v) {
+    $stmt->bindValue($k, $v);
+}
+$stmt->bindValue(':limite', $porPagina, PDO::PARAM_INT);
+$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+$stmt->execute();
 $apoderados = $stmt->fetchAll();
 
 // Contabilizar por apoderado principal / familia única
@@ -383,7 +403,7 @@ foreach ($apoderados as $row) {
     }
 }
 
-$totalApoderados = count($familiasUnicas);
+$totalApoderados = $totalApoderadosFiltrados;
 
 $pctMatricula = $totalApoderados > 0 ? round(($conMatricula / $totalApoderados) * 100, 1) : 0;
 $pctSinMatricula = $totalApoderados > 0 ? round(($sinMatricula / $totalApoderados) * 100, 1) : 0;
@@ -392,7 +412,7 @@ $pctPrimaria = $totalApoderados > 0 ? round(($porNivel['Primaria'] / $totalApode
 $pctSecundaria = $totalApoderados > 0 ? round(($porNivel['Secundaria'] / $totalApoderados) * 100, 1) : 0;
 $pctSinAsignar = $totalApoderados > 0 ? round(($porNivel['Sin Asignar'] / $totalApoderados) * 100, 1) : 0;
 
-$renderApoderados = static function (array $rows) use ($puedeEditar, $csrfToken): void {
+$renderApoderados = static function (array $rows, int $offset = 0) use ($puedeEditar, $csrfToken): void {
     if (!$rows) {
         echo '<tr><td colspan="9" class="text-center py-5">
             <div class="py-4">
@@ -403,7 +423,7 @@ $renderApoderados = static function (array $rows) use ($puedeEditar, $csrfToken)
         </td></tr>';
         return;
     }
-    $secuencia = 1;
+    $secuencia = $offset + 1;
     $avatarColors = [
         ['bg' => '#eff6ff', 'text' => '#1d4ed8'],
         ['bg' => '#f0fdf4', 'text' => '#15803d'],
@@ -539,7 +559,8 @@ $renderApoderados = static function (array $rows) use ($puedeEditar, $csrfToken)
 };
 if (($_GET['ajax'] ?? '') === 'tabla') {
     header('Content-Type: text/html; charset=utf-8');
-    $renderApoderados($apoderados);
+    header('X-Total-Operaciones: ' . $totalApoderadosFiltrados);
+    $renderApoderados($apoderados, $offset);
     exit;
 }
 ?>
@@ -710,6 +731,7 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
         <!-- Barra de Búsqueda y Filtros -->
         <div class="filter-card p-3 mb-4">
             <form method="GET" class="row g-2 align-items-center" data-live-filter data-live-target="#apoderados-rows" data-live-count-target="#apoderados-count-badge" data-live-count-prefix="Mostrando " data-live-count-singular="apoderado" data-live-count-plural="apoderados">
+                <input type="hidden" name="pagina" value="1">
                 <div class="col-lg-4 col-md-12">
                     <div class="input-group">
                         <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
@@ -745,7 +767,7 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
         <!-- Indicador de Resultados y Tabla -->
         <div class="d-flex justify-content-between align-items-center mb-2 px-1">
             <span class="fw-semibold text-secondary" style="font-size: 0.94rem;" id="apoderados-count-badge">
-                Mostrando <?= number_format($totalApoderados) ?> <?= $totalApoderados === 1 ? 'apoderado' : 'apoderados' ?>
+                Mostrando <?= number_format($totalApoderadosFiltrados) ?> <?= $totalApoderadosFiltrados === 1 ? 'apoderado' : 'apoderados' ?>
             </span>
             <span class="small text-muted"><i class="bi bi-info-circle me-1"></i>Listado en tiempo real</span>
         </div>
@@ -766,8 +788,62 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
                             <th style="min-width: 140px;" class="text-end">Acciones</th>
                         </tr>
                     </thead>
-                    <tbody id="apoderados-rows"><?php $renderApoderados($apoderados); ?></tbody>
+                    <tbody id="apoderados-rows"><?php $renderApoderados($apoderados, $offset); ?></tbody>
                 </table>
+            </div>
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 p-3 border-top bg-light-subtle rounded-bottom">
+                <div class="text-muted small">
+                    <?php if ($totalApoderadosFiltrados > 0): ?>
+                        Mostrando <strong><?= $offset + 1 ?></strong> a <strong><?= min($offset + count($apoderados), $totalApoderadosFiltrados) ?></strong> de <strong><?= number_format($totalApoderadosFiltrados) ?></strong> apoderados
+                    <?php else: ?>
+                        Mostrando 0 apoderados
+                    <?php endif; ?>
+                </div>
+                <?php if ($totalPaginas > 1): ?>
+                <nav aria-label="Navegación de páginas">
+                    <ul class="pagination pagination-sm mb-0">
+                        <?php
+                        $queryBase = $_GET;
+                        unset($queryBase['pagina'], $queryBase['ajax']);
+                        $buildPageUrl = static function (int $p) use ($queryBase): string {
+                            $params = array_merge($queryBase, ['pagina' => $p]);
+                            return 'padres.php?' . http_build_query($params);
+                        };
+                        ?>
+                        <li class="page-item <?= $paginaActual <= 1 ? 'disabled' : '' ?>">
+                            <a class="page-link" href="<?= $paginaActual <= 1 ? '#' : htmlspecialchars($buildPageUrl($paginaActual - 1)) ?>" aria-label="Anterior">
+                                <i class="bi bi-chevron-left"></i> Anterior
+                            </a>
+                        </li>
+                        <?php
+                        $startPage = max(1, $paginaActual - 2);
+                        $endPage = min($totalPaginas, $paginaActual + 2);
+                        if ($startPage > 1) {
+                            echo '<li class="page-item"><a class="page-link" href="' . htmlspecialchars($buildPageUrl(1)) . '">1</a></li>';
+                            if ($startPage > 2) {
+                                echo '<li class="page-item disabled"><span class="page-link">…</span></li>';
+                            }
+                        }
+                        for ($i = $startPage; $i <= $endPage; $i++):
+                        ?>
+                            <li class="page-item <?= $i === $paginaActual ? 'active' : '' ?>">
+                                <a class="page-link" href="<?= htmlspecialchars($buildPageUrl($i)) ?>"><?= $i ?></a>
+                            </li>
+                        <?php endfor; ?>
+                        <?php if ($endPage < $totalPaginas): ?>
+                            <?php if ($endPage < $totalPaginas - 1): ?>
+                                <li class="page-item disabled"><span class="page-link">…</span></li>
+                            <?php endif; ?>
+                            <li class="page-item"><a class="page-link" href="<?= htmlspecialchars($buildPageUrl($totalPaginas)) ?>"><?= $totalPaginas ?></a></li>
+                        <?php endif; ?>
+                        <li class="page-item <?= $paginaActual >= $totalPaginas ? 'disabled' : '' ?>">
+                            <a class="page-link" href="<?= $paginaActual >= $totalPaginas ? '#' : htmlspecialchars($buildPageUrl($paginaActual + 1)) ?>" aria-label="Siguiente">
+                                Siguiente <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+                <?php endif; ?>
             </div>
         </div>
     </main>

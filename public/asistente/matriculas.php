@@ -482,9 +482,13 @@ $sql = 'SELECT m.*, a.anio AS anio, al.nombres, al.apellido_paterno, al.apellido
     JOIN grado_seccion gs ON gs.id = m.grado_seccion_id
     JOIN grado g ON g.id = gs.grado_id
     JOIN seccion s ON s.id = gs.seccion_id';
+$paginaActual = max(1, (int) ($_GET['pagina'] ?? 1));
+$porPagina = 50;
+
+$whereSql = '';
 $params = [];
 if ($busqueda !== '') {
-    $sql .= " WHERE (
+    $whereSql = " WHERE (
         al.nombres ILIKE :busqueda 
         OR al.apellido_paterno ILIKE :busqueda 
         OR al.apellido_materno ILIKE :busqueda 
@@ -519,11 +523,36 @@ if ($busqueda !== '') {
     )";
     $params['busqueda'] = "%$busqueda%";
 }
-$sql .= ' ORDER BY a.anio DESC, m.id DESC';
+
+$sqlCount = 'SELECT COUNT(m.id)
+    FROM matricula m
+    JOIN anio a ON a.id = m.anio_id
+    JOIN estudiante al ON al.id = m.estudiante_id
+    JOIN nivel n ON n.id = m.nivel_id
+    JOIN grado_seccion gs ON gs.id = m.grado_seccion_id
+    JOIN grado g ON g.id = gs.grado_id
+    JOIN seccion s ON s.id = gs.seccion_id' . $whereSql;
+
+$stmtCount = $pdo->prepare($sqlCount);
+$stmtCount->execute($params);
+$totalMatriculas = (int) $stmtCount->fetchColumn();
+
+$totalPaginas = max(1, (int) ceil($totalMatriculas / $porPagina));
+if ($paginaActual > $totalPaginas) {
+    $paginaActual = $totalPaginas;
+}
+$offset = ($paginaActual - 1) * $porPagina;
+
+$sql .= $whereSql . ' ORDER BY a.anio DESC, m.id DESC LIMIT :limite OFFSET :offset';
 $stmt = $pdo->prepare($sql);
-$stmt->execute($params);
+if ($busqueda !== '') {
+    $stmt->bindValue(':busqueda', "%$busqueda%", PDO::PARAM_STR);
+}
+$stmt->bindValue(':limite', $porPagina, PDO::PARAM_INT);
+$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+$stmt->execute();
 $matriculas = $stmt->fetchAll();
-$renderMatriculaRows = static function (array $rows) use ($csrfToken): void {
+$renderMatriculaRows = static function (array $rows, int $offset = 0) use ($csrfToken): void {
     if (!$rows) {
         echo '<tr><td colspan="8" class="text-center py-5">
             <div class="py-4">
@@ -534,7 +563,7 @@ $renderMatriculaRows = static function (array $rows) use ($csrfToken): void {
         </td></tr>';
         return;
     }
-    $secuencia = 1;
+    $secuencia = $offset + 1;
     $avatarColors = [
         ['bg' => '#eff6ff', 'text' => '#1d4ed8'],
         ['bg' => '#f0fdf4', 'text' => '#15803d'],
@@ -594,7 +623,8 @@ $renderMatriculaRows = static function (array $rows) use ($csrfToken): void {
 };
 if (($_GET['ajax'] ?? '') === 'tabla') {
     header('Content-Type: text/html; charset=utf-8');
-    $renderMatriculaRows($matriculas);
+    header('X-Total-Operaciones: ' . $totalMatriculas);
+    $renderMatriculaRows($matriculas, $offset);
     exit;
 }
 ?>
@@ -684,9 +714,10 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
     <section class="table-card p-4">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
             <h3 class="h5 mb-0 fw-bold text-dark d-flex align-items-center gap-2"><i class="bi bi-clock-history text-primary"></i> Historial de Matrículas</h3>
-            <span class="badge bg-primary px-3 py-2 fs-6" id="matriculas-count-badge"><?= count($matriculas) ?> matrículas</span>
+            <span class="badge bg-primary px-3 py-2 fs-6" id="matriculas-count-badge"><?= number_format($totalMatriculas) ?> <?= $totalMatriculas === 1 ? 'matrícula' : 'matrículas' ?></span>
         </div>
         <form method="GET" class="row g-2 mb-3" data-live-filter data-live-target="#matriculas-rows" data-live-count-target="#matriculas-count-badge" data-live-count-singular="matrícula" data-live-count-plural="matrículas">
+            <input type="hidden" name="pagina" value="1">
             <div class="col-sm-9">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
@@ -713,8 +744,62 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
                         <th style="min-width: 140px;" class="text-end">Acciones</th>
                     </tr>
                 </thead>
-                <tbody id="matriculas-rows"><?php $renderMatriculaRows($matriculas); ?></tbody>
+                <tbody id="matriculas-rows"><?php $renderMatriculaRows($matriculas, $offset); ?></tbody>
             </table>
+        </div>
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 p-3 border-top bg-light-subtle rounded-bottom mt-2">
+            <div class="text-muted small">
+                <?php if ($totalMatriculas > 0): ?>
+                    Mostrando <strong><?= $offset + 1 ?></strong> a <strong><?= min($offset + count($matriculas), $totalMatriculas) ?></strong> de <strong><?= number_format($totalMatriculas) ?></strong> matrículas
+                <?php else: ?>
+                    Mostrando 0 matrículas
+                <?php endif; ?>
+            </div>
+            <?php if ($totalPaginas > 1): ?>
+            <nav aria-label="Navegación de páginas">
+                <ul class="pagination pagination-sm mb-0">
+                    <?php
+                    $queryBase = $_GET;
+                    unset($queryBase['pagina'], $queryBase['ajax']);
+                    $buildPageUrl = static function (int $p) use ($queryBase): string {
+                        $params = array_merge($queryBase, ['pagina' => $p]);
+                        return 'matriculas.php?' . http_build_query($params);
+                    };
+                    ?>
+                    <li class="page-item <?= $paginaActual <= 1 ? 'disabled' : '' ?>">
+                        <a class="page-link" href="<?= $paginaActual <= 1 ? '#' : htmlspecialchars($buildPageUrl($paginaActual - 1)) ?>" aria-label="Anterior">
+                            <i class="bi bi-chevron-left"></i> Anterior
+                        </a>
+                    </li>
+                    <?php
+                    $startPage = max(1, $paginaActual - 2);
+                    $endPage = min($totalPaginas, $paginaActual + 2);
+                    if ($startPage > 1) {
+                        echo '<li class="page-item"><a class="page-link" href="' . htmlspecialchars($buildPageUrl(1)) . '">1</a></li>';
+                        if ($startPage > 2) {
+                            echo '<li class="page-item disabled"><span class="page-link">…</span></li>';
+                        }
+                    }
+                    for ($i = $startPage; $i <= $endPage; $i++):
+                    ?>
+                        <li class="page-item <?= $i === $paginaActual ? 'active' : '' ?>">
+                            <a class="page-link" href="<?= htmlspecialchars($buildPageUrl($i)) ?>"><?= $i ?></a>
+                        </li>
+                    <?php endfor; ?>
+                    <?php if ($endPage < $totalPaginas): ?>
+                        <?php if ($endPage < $totalPaginas - 1): ?>
+                            <li class="page-item disabled"><span class="page-link">…</span></li>
+                        <?php endif; ?>
+                        <li class="page-item"><a class="page-link" href="<?= htmlspecialchars($buildPageUrl($totalPaginas)) ?>"><?= $totalPaginas ?></a></li>
+                    <?php endif; ?>
+                    <li class="page-item <?= $paginaActual >= $totalPaginas ? 'disabled' : '' ?>">
+                        <a class="page-link" href="<?= $paginaActual >= $totalPaginas ? '#' : htmlspecialchars($buildPageUrl($paginaActual + 1)) ?>" aria-label="Siguiente">
+                            Siguiente <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <?php endif; ?>
         </div>
     </section>
 </main>

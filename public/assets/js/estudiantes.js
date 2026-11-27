@@ -43,7 +43,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error('No se pudo actualizar la lista de estudiantes.');
             studentsRows.innerHTML = await response.text();
             if (studentsCount) {
-                studentsCount.textContent = `${studentsRows.querySelectorAll('[data-student-row]').length} estudiantes`;
+                const totalOps = response.headers.get('X-Total-Operaciones');
+                if (totalOps !== null) {
+                    const totalNum = parseInt(totalOps, 10);
+                    studentsCount.textContent = `${totalNum.toLocaleString()} ${totalNum === 1 ? 'estudiante' : 'estudiantes'}`;
+                } else {
+                    studentsCount.textContent = `${studentsRows.querySelectorAll('[data-student-row]').length} estudiantes`;
+                }
             }
         } catch (error) {
             if (error.name !== 'AbortError') {

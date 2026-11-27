@@ -74,14 +74,34 @@ if (is_string($tipoAccion) && in_array($tipoAccion, ['INSERT', 'UPDATE', 'DELETE
     };
 }
 $whereSql = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+
+$paginaActual = max(1, (int) ($_GET['pagina'] ?? 1));
+$porPagina = 50;
+
+$sqlCount = "SELECT COUNT(a.id) FROM auditoria_movimiento a LEFT JOIN usuario u ON u.id = a.usuario_id $whereSql";
+$stmtCount = $pdo->prepare($sqlCount);
+$stmtCount->execute($params);
+$totalMovimientos = (int) $stmtCount->fetchColumn();
+
+$totalPaginas = max(1, (int) ceil($totalMovimientos / $porPagina));
+if ($paginaActual > $totalPaginas) {
+    $paginaActual = $totalPaginas;
+}
+$offset = ($paginaActual - 1) * $porPagina;
+
 $sql = "SELECT a.id, a.creado_en, a.accion, a.detalles, a.ip_origen, u.nombres AS usuario
         FROM auditoria_movimiento a
         LEFT JOIN usuario u ON u.id = a.usuario_id
         $whereSql
         ORDER BY a.id DESC
-        LIMIT 500";
+        LIMIT :limite OFFSET :offset";
 $stmt = $pdo->prepare($sql);
-$stmt->execute($params);
+foreach ($params as $k => $v) {
+    $stmt->bindValue($k, $v);
+}
+$stmt->bindValue(':limite', $porPagina, PDO::PARAM_INT);
+$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+$stmt->execute();
 $movimientos = $stmt->fetchAll();
 $renderRows = static function (array $rows) use ($puedeEliminarAuditoria, $csrfToken): void {
     foreach ($rows as $movimiento) {
@@ -105,6 +125,7 @@ $renderRows = static function (array $rows) use ($puedeEliminarAuditoria, $csrfT
 };
 if (($_GET['ajax'] ?? '') === 'tabla') {
     header('Content-Type: text/html; charset=utf-8');
+    header('X-Total-Operaciones: ' . $totalMovimientos);
     $renderRows($movimientos);
     exit;
 }
@@ -150,6 +171,7 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
                 <div class="col-lg-4">
                     <h5 class="fw-bold text-dark mb-3"><i class="bi bi-funnel text-primary"></i> Filtros de Auditoría</h5>
                     <form id="audit-filters" class="row g-2 align-items-end">
+                        <input type="hidden" name="pagina" value="1">
                         <div class="col-12">
                             <label class="form-label" for="fecha_inicio">Desde</label>
                             <input class="form-control" type="date" id="fecha_inicio" name="fecha_inicio" value="<?= htmlspecialchars(is_string($fechaInicio) ? $fechaInicio : '') ?>">
@@ -183,10 +205,11 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
     </section>
 
     <section class="card audit-card">
-        <div class="card-header bg-white py-3 px-4 border-bottom">
+        <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2">
             <h5 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
-                <i class="bi bi-list-columns-reverse text-primary"></i> Registros Recientes
+                <i class="bi bi-list-columns-reverse text-primary"></i> Historial de Movimientos
             </h5>
+            <span class="badge bg-primary px-3 py-2 fs-6"><?= number_format($totalMovimientos) ?> <?= $totalMovimientos === 1 ? 'registro' : 'registros' ?></span>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -203,6 +226,60 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
                     </thead>
                     <tbody id="audit-rows"><?php $renderRows($movimientos); ?></tbody>
                 </table>
+            </div>
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 p-3 border-top bg-light-subtle rounded-bottom">
+                <div class="text-muted small">
+                    <?php if ($totalMovimientos > 0): ?>
+                        Mostrando <strong><?= $offset + 1 ?></strong> a <strong><?= min($offset + count($movimientos), $totalMovimientos) ?></strong> de <strong><?= number_format($totalMovimientos) ?></strong> registros
+                    <?php else: ?>
+                        Mostrando 0 registros
+                    <?php endif; ?>
+                </div>
+                <?php if ($totalPaginas > 1): ?>
+                <nav aria-label="Navegación de páginas">
+                    <ul class="pagination pagination-sm mb-0">
+                        <?php
+                        $queryBase = $_GET;
+                        unset($queryBase['pagina'], $queryBase['ajax']);
+                        $buildPageUrl = static function (int $p) use ($queryBase): string {
+                            $params = array_merge($queryBase, ['pagina' => $p]);
+                            return 'auditoria.php?' . http_build_query($params);
+                        };
+                        ?>
+                        <li class="page-item <?= $paginaActual <= 1 ? 'disabled' : '' ?>">
+                            <a class="page-link" href="<?= $paginaActual <= 1 ? '#' : htmlspecialchars($buildPageUrl($paginaActual - 1)) ?>" aria-label="Anterior">
+                                <i class="bi bi-chevron-left"></i> Anterior
+                            </a>
+                        </li>
+                        <?php
+                        $startPage = max(1, $paginaActual - 2);
+                        $endPage = min($totalPaginas, $paginaActual + 2);
+                        if ($startPage > 1) {
+                            echo '<li class="page-item"><a class="page-link" href="' . htmlspecialchars($buildPageUrl(1)) . '">1</a></li>';
+                            if ($startPage > 2) {
+                                echo '<li class="page-item disabled"><span class="page-link">…</span></li>';
+                            }
+                        }
+                        for ($i = $startPage; $i <= $endPage; $i++):
+                        ?>
+                            <li class="page-item <?= $i === $paginaActual ? 'active' : '' ?>">
+                                <a class="page-link" href="<?= htmlspecialchars($buildPageUrl($i)) ?>"><?= $i ?></a>
+                            </li>
+                        <?php endfor; ?>
+                        <?php if ($endPage < $totalPaginas): ?>
+                            <?php if ($endPage < $totalPaginas - 1): ?>
+                                <li class="page-item disabled"><span class="page-link">…</span></li>
+                            <?php endif; ?>
+                            <li class="page-item"><a class="page-link" href="<?= htmlspecialchars($buildPageUrl($totalPaginas)) ?>"><?= $totalPaginas ?></a></li>
+                        <?php endif; ?>
+                        <li class="page-item <?= $paginaActual >= $totalPaginas ? 'disabled' : '' ?>">
+                            <a class="page-link" href="<?= $paginaActual >= $totalPaginas ? '#' : htmlspecialchars($buildPageUrl($paginaActual + 1)) ?>" aria-label="Siguiente">
+                                Siguiente <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+                <?php endif; ?>
             </div>
         </div>
     </section>
