@@ -327,7 +327,11 @@ LEFT JOIN LATERAL (
 SQL;
 $conditions = [];
 if ($busqueda !== '') {
-    $conditions[] = "CONCAT_WS(' ', r.dni, r.nombres, r.apellido_paterno, r.apellido_materno, al.dni, al.nombres, al.apellido_paterno, al.apellido_materno) ILIKE :busqueda";
+    $conditions[] = "(
+        CONCAT_WS(' ', r.dni, r.nombres, r.apellido_paterno, r.apellido_materno, al.dni, al.nombres, al.apellido_paterno, al.apellido_materno) ILIKE :busqueda
+        OR CONCAT_WS(' ', r.apellido_paterno, r.apellido_materno, r.nombres) ILIKE :busqueda
+        OR CONCAT_WS(' ', al.apellido_paterno, al.apellido_materno, al.nombres) ILIKE :busqueda
+    )";
     $params['busqueda'] = "%$busqueda%";
 }
 if ($matriculaFilters) {

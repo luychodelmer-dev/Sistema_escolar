@@ -139,15 +139,23 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'buscar_estudiantes') {
         exit;
     }
     $stmt = $pdo->prepare(
-        'SELECT estudiante.id, estudiante.dni, estudiante.nombres,
+        'SELECT DISTINCT estudiante.id, estudiante.dni, estudiante.nombres,
                 estudiante.apellido_paterno, estudiante.apellido_materno
          FROM estudiante
-         WHERE estudiante.dni ILIKE :dni
-            OR CONCAT_WS(\' \', estudiante.nombres, estudiante.apellido_paterno, estudiante.apellido_materno) ILIKE :nombre
+         LEFT JOIN estudiante_responsable er ON er.estudiante_id = estudiante.id
+         LEFT JOIN responsable r ON r.id = er.responsable_id
+         WHERE estudiante.dni ILIKE :term
+            OR CONCAT_WS(\' \', estudiante.nombres, estudiante.apellido_paterno, estudiante.apellido_materno) ILIKE :term
+            OR CONCAT_WS(\' \', estudiante.apellido_paterno, estudiante.apellido_materno, estudiante.nombres) ILIKE :term
+            OR (r.id IS NOT NULL AND (
+                r.dni ILIKE :term
+                OR CONCAT_WS(\' \', r.nombres, r.apellido_paterno, r.apellido_materno) ILIKE :term
+                OR CONCAT_WS(\' \', r.apellido_paterno, r.apellido_materno, r.nombres) ILIKE :term
+            ))
          ORDER BY estudiante.apellido_paterno, estudiante.nombres
          LIMIT 15'
     );
-    $stmt->execute(['dni' => '%' . $termino . '%', 'nombre' => '%' . $termino . '%']);
+    $stmt->execute(['term' => '%' . $termino . '%']);
     echo json_encode($stmt->fetchAll(), JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -429,7 +437,39 @@ $sql = 'SELECT m.*, a.anio AS anio, al.nombres, al.apellido_paterno, al.apellido
     JOIN seccion s ON s.id = gs.seccion_id';
 $params = [];
 if ($busqueda !== '') {
-    $sql .= ' WHERE al.nombres ILIKE :busqueda OR al.apellido_paterno ILIKE :busqueda OR al.apellido_materno ILIKE :busqueda OR al.dni ILIKE :busqueda';
+    $sql .= " WHERE (
+        al.nombres ILIKE :busqueda 
+        OR al.apellido_paterno ILIKE :busqueda 
+        OR al.apellido_materno ILIKE :busqueda 
+        OR al.dni ILIKE :busqueda
+        OR CONCAT_WS(' ', al.nombres, al.apellido_paterno, al.apellido_materno) ILIKE :busqueda
+        OR CONCAT_WS(' ', al.apellido_paterno, al.apellido_materno, al.nombres) ILIKE :busqueda
+        OR EXISTS (
+            SELECT 1 FROM estudiante_responsable er
+            JOIN responsable r ON r.id = er.responsable_id
+            WHERE er.estudiante_id = al.id
+              AND (
+                  r.dni ILIKE :busqueda
+                  OR r.nombres ILIKE :busqueda
+                  OR r.apellido_paterno ILIKE :busqueda
+                  OR r.apellido_materno ILIKE :busqueda
+                  OR CONCAT_WS(' ', r.nombres, r.apellido_paterno, r.apellido_materno) ILIKE :busqueda
+                  OR CONCAT_WS(' ', r.apellido_paterno, r.apellido_materno, r.nombres) ILIKE :busqueda
+              )
+        )
+        OR EXISTS (
+            SELECT 1 FROM responsable r
+            WHERE r.id = m.apoderado_principal_id
+              AND (
+                  r.dni ILIKE :busqueda
+                  OR r.nombres ILIKE :busqueda
+                  OR r.apellido_paterno ILIKE :busqueda
+                  OR r.apellido_materno ILIKE :busqueda
+                  OR CONCAT_WS(' ', r.nombres, r.apellido_paterno, r.apellido_materno) ILIKE :busqueda
+                  OR CONCAT_WS(' ', r.apellido_paterno, r.apellido_materno, r.nombres) ILIKE :busqueda
+              )
+        )
+    )";
     $params['busqueda'] = "%$busqueda%";
 }
 $sql .= ' ORDER BY a.anio DESC, m.id DESC';
@@ -595,7 +635,7 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
             <div class="col-sm-9">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
-                    <input class="form-control border-start-0 ps-0" id="buscar" name="buscar" value="<?= htmlspecialchars($busqueda) ?>" placeholder="Buscar por DNI o nombres de estudiante...">
+                    <input class="form-control border-start-0 ps-0" id="buscar" name="buscar" value="<?= htmlspecialchars($busqueda) ?>" placeholder="Buscar por DNI o nombres de estudiante, padre o apoderado...">
                 </div>
             </div>
             <div class="col-sm-3">

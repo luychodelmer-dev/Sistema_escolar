@@ -59,8 +59,24 @@ if ($filtroEstado === 'pagados') {
 
 if ($busqueda !== '') {
     $sql .= " AND (
-        e.nombres ILIKE :busq OR e.apellido_paterno ILIKE :busq OR e.apellido_materno ILIKE :busq OR e.dni ILIKE :busq
-        OR p.entregado_por ILIKE :busq OR p.responsable ILIKE :busq OR p.nro_recibo ILIKE :busq
+        CONCAT_WS(' ', e.dni, e.nombres, e.apellido_paterno, e.apellido_materno) ILIKE :busq
+        OR CONCAT_WS(' ', e.apellido_paterno, e.apellido_materno, e.nombres) ILIKE :busq
+        OR (r.id IS NOT NULL AND (
+            CONCAT_WS(' ', r.dni, r.nombres, r.apellido_paterno, r.apellido_materno) ILIKE :busq
+            OR CONCAT_WS(' ', r.apellido_paterno, r.apellido_materno, r.nombres) ILIKE :busq
+        ))
+        OR p.entregado_por ILIKE :busq
+        OR p.responsable ILIKE :busq
+        OR p.nro_recibo ILIKE :busq
+        OR EXISTS (
+            SELECT 1 FROM estudiante_responsable er
+            JOIN responsable er_r ON er_r.id = er.responsable_id
+            WHERE er.estudiante_id = e.id
+              AND (
+                  CONCAT_WS(' ', er_r.dni, er_r.nombres, er_r.apellido_paterno, er_r.apellido_materno) ILIKE :busq
+                  OR CONCAT_WS(' ', er_r.apellido_paterno, er_r.apellido_materno, er_r.nombres) ILIKE :busq
+              )
+        )
     )";
     $params['busq'] = "%$busqueda%";
 }
@@ -407,11 +423,19 @@ if ($filtroConcepto) {
                 </select>
             </div>
 
-            <div class="col-md-3 d-flex gap-2">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-secondary" for="buscar">Buscar DNI / Nombre</label>
+                <input type="text" class="form-control" id="buscar" name="buscar" value="<?= htmlspecialchars($busqueda) ?>" placeholder="Estudiante, padre o recibo...">
+            </div>
+
+            <div class="col-md-2 d-flex gap-2">
                 <button type="submit" class="btn btn-primary w-100 fw-semibold d-inline-flex align-items-center justify-content-center gap-1">
                     <i class="bi bi-funnel-fill"></i> Filtrar
                 </button>
                 <a href="reporte_pagos.php" class="btn btn-light border text-secondary" title="Limpiar filtros">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </a>
+            </div>
                     <i class="bi bi-x-circle"></i>
                 </a>
             </div>

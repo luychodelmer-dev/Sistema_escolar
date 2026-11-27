@@ -634,9 +634,28 @@ LEFT JOIN cuenta_pago cuenta ON cuenta.id = p.cuenta_pago_id
 SQL;
 $params = [];
 if ($busqueda !== '') {
-    $sql .= ' WHERE COALESCE(a.nombres, \'\') ILIKE :estudiante_busqueda OR p.responsable ILIKE :responsable_busqueda OR p.concepto ILIKE :concepto_busqueda OR p.entregado_por ILIKE :entregado_busqueda';
-    $like = "%$busqueda%";
-    $params = ['estudiante_busqueda' => $like, 'responsable_busqueda' => $like, 'concepto_busqueda' => $like, 'entregado_busqueda' => $like];
+    $sql .= " WHERE (
+        CONCAT_WS(' ', a.dni, a.nombres, a.apellido_paterno, a.apellido_materno) ILIKE :busqueda
+        OR CONCAT_WS(' ', a.apellido_paterno, a.apellido_materno, a.nombres) ILIKE :busqueda
+        OR (r.id IS NOT NULL AND (
+            CONCAT_WS(' ', r.dni, r.nombres, r.apellido_paterno, r.apellido_materno) ILIKE :busqueda
+            OR CONCAT_WS(' ', r.apellido_paterno, r.apellido_materno, r.nombres) ILIKE :busqueda
+        ))
+        OR p.responsable ILIKE :busqueda
+        OR p.entregado_por ILIKE :busqueda
+        OR p.concepto ILIKE :busqueda
+        OR p.nro_recibo ILIKE :busqueda
+        OR EXISTS (
+            SELECT 1 FROM estudiante_responsable er
+            JOIN responsable er_r ON er_r.id = er.responsable_id
+            WHERE er.estudiante_id = a.id
+              AND (
+                  CONCAT_WS(' ', er_r.dni, er_r.nombres, er_r.apellido_paterno, er_r.apellido_materno) ILIKE :busqueda
+                  OR CONCAT_WS(' ', er_r.apellido_paterno, er_r.apellido_materno, er_r.nombres) ILIKE :busqueda
+              )
+        )
+    )";
+    $params = ['busqueda' => "%$busqueda%"];
 }
 $sql .= ' ORDER BY p.fecha_pago DESC, p.id DESC';
 $stmt = $pdo->prepare($sql);
@@ -744,7 +763,7 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($tokenCsrf, ENT_QUOTES) ?>">
             <input type="hidden" name="action" value="registrar_pago">
             <input type="hidden" id="matricula_id" name="matricula_id" value="<?= htmlspecialchars((string) ($_POST['matricula_id'] ?? '')) ?>">
-            <div class="col-md-4 position-relative"><label class="form-label required" for="estudiante">Estudiante</label><input class="form-control" id="estudiante" autocomplete="off" aria-autocomplete="list" aria-controls="estudiante-sugerencias" placeholder="Buscar por DNI o nombres..." required><div id="estudiante-sugerencias" class="list-group position-absolute start-0 top-100 w-100 shadow d-none" style="z-index:1050"></div></div>
+            <div class="col-md-4 position-relative"><label class="form-label required" for="estudiante">Estudiante</label><input class="form-control" id="estudiante" autocomplete="off" aria-autocomplete="list" aria-controls="estudiante-sugerencias" placeholder="Buscar por DNI o nombres de estudiante o apoderado..." required><div id="estudiante-sugerencias" class="list-group position-absolute start-0 top-100 w-100 shadow d-none" style="z-index:1050"></div></div>
             <div class="col-md-4"><label class="form-label" for="apoderado_principal">Apoderado principal</label><input class="form-control" id="apoderado_principal" readonly placeholder="Se completa automáticamente al elegir estudiante"></div>
             <div class="col-md-4"><label class="form-label required" for="concepto_id">Concepto</label><select class="form-select" id="concepto_id" name="concepto_id" required><option value="">Seleccionar Concepto</option><?php foreach ($conceptos as $concepto): ?><option value="<?= (int) $concepto['id'] ?>" <?= $concepto['monto_default'] === null ? 'disabled' : '' ?>><?= htmlspecialchars($concepto['descripcion']) ?> · <?= $concepto['tipo_cobro'] === 'familia' ? 'Por Familia' : 'Por Estudiante' ?><?= $concepto['monto_default'] !== null ? ' · S/ ' . number_format((float) $concepto['monto_default'], 2) : ' · tarifa pendiente' ?></option><?php endforeach; ?></select></div>
             <div class="col-md-3"><label class="form-label required" for="monto_total">Total del concepto</label><input class="form-control" id="monto_total" type="number" readonly required></div>
@@ -781,7 +800,7 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
             <div class="col-sm-9">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
-                    <input class="form-control border-start-0 ps-0" id="buscar" name="buscar" value="<?= htmlspecialchars($busqueda) ?>" placeholder="Buscar estudiante, apoderado, concepto o entregado por...">
+                    <input class="form-control border-start-0 ps-0" id="buscar" name="buscar" value="<?= htmlspecialchars($busqueda) ?>" placeholder="Buscar estudiante, padre o apoderado por DNI/nombres, concepto o recibo...">
                 </div>
             </div>
             <div class="col-sm-3">

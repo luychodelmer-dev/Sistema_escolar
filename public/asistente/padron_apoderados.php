@@ -70,7 +70,12 @@ if ($filtroSeccion) {
     $params['seccion_id'] = $filtroSeccion;
 }
 if ($busqueda !== '') {
-    $sql .= " AND (r.dni ILIKE :busq OR r.nombres ILIKE :busq OR r.apellido_paterno ILIKE :busq OR r.apellido_materno ILIKE :busq OR e.nombres ILIKE :busq OR e.apellido_paterno ILIKE :busq)";
+    $sql .= " AND (
+        CONCAT_WS(' ', r.dni, r.nombres, r.apellido_paterno, r.apellido_materno) ILIKE :busq 
+        OR CONCAT_WS(' ', r.apellido_paterno, r.apellido_materno, r.nombres) ILIKE :busq
+        OR CONCAT_WS(' ', e.dni, e.nombres, e.apellido_paterno, e.apellido_materno) ILIKE :busq
+        OR CONCAT_WS(' ', e.apellido_paterno, e.apellido_materno, e.nombres) ILIKE :busq
+    )";
     $params['busq'] = "%$busqueda%";
 }
 

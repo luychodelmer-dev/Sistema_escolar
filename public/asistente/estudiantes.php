@@ -171,7 +171,23 @@ $params = [];
 $conditions[] = 'al.estado_academico = :estado_academico';
 $params['estado_academico'] = $estadoAcademico;
 if ($busqueda !== '') {
-    $conditions[] = "CONCAT_WS(' ', al.dni, al.nombres, al.apellido_paterno, al.apellido_materno) ILIKE :busqueda";
+    $conditions[] = "(
+        CONCAT_WS(' ', al.dni, al.nombres, al.apellido_paterno, al.apellido_materno) ILIKE :busqueda
+        OR CONCAT_WS(' ', al.apellido_paterno, al.apellido_materno, al.nombres) ILIKE :busqueda
+        OR EXISTS (
+            SELECT 1 FROM estudiante_responsable er
+            JOIN responsable r ON r.id = er.responsable_id
+            WHERE er.estudiante_id = al.id
+              AND (
+                  r.dni ILIKE :busqueda
+                  OR r.nombres ILIKE :busqueda
+                  OR r.apellido_paterno ILIKE :busqueda
+                  OR r.apellido_materno ILIKE :busqueda
+                  OR CONCAT_WS(' ', r.nombres, r.apellido_paterno, r.apellido_materno) ILIKE :busqueda
+                  OR CONCAT_WS(' ', r.apellido_paterno, r.apellido_materno, r.nombres) ILIKE :busqueda
+              )
+        )
+    )";
     $params['busqueda'] = '%' . $busqueda . '%';
 }
 if ($nivelId !== null) {
@@ -518,7 +534,7 @@ if (($_GET['ajax'] ?? '') === 'tabla') {
             <div class="col-lg-4 col-md-12">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
-                    <input class="form-control border-start-0 ps-0" id="filtro-busqueda" type="search" name="q" placeholder="Buscar por DNI o nombres de estudiante..." value="<?= htmlspecialchars($busqueda) ?>">
+                    <input class="form-control border-start-0 ps-0" id="filtro-busqueda" type="search" name="q" placeholder="Buscar por DNI o nombres de estudiante, padre o apoderado..." value="<?= htmlspecialchars($busqueda) ?>">
                 </div>
             </div>
             <div class="col-sm-4 col-lg-3">
